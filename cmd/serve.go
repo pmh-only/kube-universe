@@ -21,6 +21,7 @@ import (
 	"os"
 
 	renderer "github.com/afritzler/kube-universe/pkg/renderer"
+	"github.com/afritzler/kube-universe/pkg/websocket"
 	"github.com/rakyll/statik/fs"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -53,16 +54,24 @@ func init() {
 
 func serve() {
 	fmt.Printf("started server on http://localhost:%s\n", port)
+	
+	config := os.Getenv("KUBECONFIG")
+	if config == "" {
+		config = rootCmd.Flag("kubeconfig").Value.String()
+	}
+
+	// Create and start websocket hub
+	hub := websocket.NewHub(config)
+	go hub.Run()
+
 	statikFS, err := fs.New()
 	if err != nil {
 		log.Fatal(err)
 	}
 	http.Handle("/", http.FileServer(statikFS))
+	
+	// Keep the original /graph endpoint for backward compatibility
 	http.HandleFunc("/graph", func(writer http.ResponseWriter, request *http.Request) {
-		config := os.Getenv("KUBECONFIG")
-		if config == "" {
-			config = rootCmd.Flag("kubeconfig").Value.String()
-		}
 		data, err := renderer.GetGraph(config)
 		if err != nil {
 			fmt.Printf("failed to render landscape graph: %s", err)
@@ -74,6 +83,10 @@ func serve() {
 			fmt.Printf("faild to write response data: %s", err)
 		}
 	})
+
+	// Add websocket endpoint
+	http.HandleFunc("/ws", hub.HandleWebSocket)
+
 	if err := http.ListenAndServe(getPort(), nil); err != nil {
 		panic(fmt.Sprintf("faild to start server: %s", err))
 	}

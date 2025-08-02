@@ -1,6 +1,11 @@
 
 <head>
-    <style> body { margin: 0; } </style>
+    <style> 
+      body { 
+        margin: 0; 
+        background-color: #1a1a1a; /* Dark background for better contrast */
+      } 
+    </style>
     <script src="/js/three.min.js"></script>
     <script src="/js/three-spritetext.min.js"></script>
     <script src="/js/3d-force-graph.min.js"></script>
@@ -8,13 +13,15 @@
   </head>
 
   <body>
+    <div id="connection-status" style="position: fixed; top: 10px; right: 10px; padding: 8px 12px; border-radius: 4px; font-family: Arial, sans-serif; font-size: 12px; z-index: 1000;">
+      Connecting...
+    </div>
     <div id="3d-graph"></div>
 
     <script>
       const elem = document.getElementById('3d-graph');
-      const graph = ForceGraph3D()
-        (elem)
-          .jsonUrl('/graph')
+      const graph = ForceGraph3D()(elem)
+          .backgroundColor('#0a0a0a') // Very dark background for contrast
           .nodeLabel(function(n){
             if (n.type == "pod" && n.hasOwnProperty('status') && n.status != "Running") {
               return n.name + '<br/> Status: ' + n.status + '<br/> StatusMsg: ' + n.statusmessage
@@ -23,32 +30,55 @@
             }
           })
           .nodeOpacity(1)
-          .nodeAutoColorBy(function(n){
+          .nodeColor(function(n){
+            // Use bright, consistent colors for each type
             if (n.type == "namespace") {
-              return n.type
+              return '#66ccff'; // Bright cyan for namespaces
             } else if (n.type == "pod") {
-              return n.namespace
+              if (n.status === "Running") return '#44ff44'; // Bright green for running
+              if (n.status === "Failed") return '#ff4444'; // Bright red for failed
+              return '#ff8844'; // Bright orange for other states
             } else if (n.type == "node") {
-              return n.type
+              return '#4488ff'; // Bright blue for nodes
             }
+            return '#ffffff'; // Default white
           })
           .nodeThreeObject(function(n){
             if (n.type == "pod" && n.hasOwnProperty('status')
               && n.status != "Running" && n.status != "Succeeded") {
+              // Bright red/orange for failed pods
               var mesh = new THREE.Mesh(
                 new THREE.DodecahedronGeometry(20),
-                new THREE.MeshLambertMaterial({
-                  color: Math.round(Math.random() * Math.pow(2, 24)),
+                new THREE.MeshPhongMaterial({
+                  color: n.status === "Failed" ? 0xff4444 : 0xff8844,
+                  emissive: n.status === "Failed" ? 0x441111 : 0x442211,
+                  shininess: 100,
+                  transparent: false,
+                  opacity: 1
+              }))
+              return mesh
+            }
+            if (n.type == "pod" && n.hasOwnProperty('status') && n.status == "Running") {
+              // Bright green for running pods
+              var mesh = new THREE.Mesh(
+                new THREE.SphereGeometry(15),
+                new THREE.MeshPhongMaterial({
+                  color: 0x44ff44,
+                  emissive: 0x114411,
+                  shininess: 100,
                   transparent: false,
                   opacity: 1
               }))
               return mesh
             }
             if (n.type == "node") {
+              // Bright blue for nodes
               var mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(20,20,20),
-                new THREE.MeshLambertMaterial({
-                  color: Math.round(Math.random() * Math.pow(2, 24)),
+                new THREE.BoxGeometry(25,25,25),
+                new THREE.MeshPhongMaterial({
+                  color: 0x4488ff,
+                  emissive: 0x112244,
+                  shininess: 100,
                   transparent: false,
                   opacity: 1
               }))
@@ -56,17 +86,23 @@
             }
             if (n.type == "namespace") {
               const sprite = new SpriteText(n.name);
-              sprite.color = n.color;
-              sprite.textHeight = 5;
+              sprite.color = '#ffffff'; // Bright white text
+              sprite.textHeight = 8;
+              sprite.backgroundColor = 'rgba(68, 136, 255, 0.8)'; // Semi-transparent blue background
+              sprite.padding = 4;
+              sprite.borderRadius = 3;
               return sprite;
             }
           })
-          .linkAutoColorBy('value')
-          .linkWidth(0.5)
-          .linkDirectionalParticles(10)
+          .linkColor(() => '#66ccff') // Bright cyan links
+          .linkWidth(2) // Thicker links for better visibility
+          .linkDirectionalParticles(15) // More particles
+          .linkDirectionalParticleWidth(3) // Brighter particles
+          .linkDirectionalParticleColor(() => '#ffffff') // White particles
           .numDimensions(3)
           .nodeResolution(15)
-          .linkDirectionalParticleSpeed(0.005)
+          .linkDirectionalParticleSpeed(0.008) // Faster particles
+          .linkOpacity(0.8) // Slightly transparent for depth
           .onNodeHover(node => elem.style.cursor = node ? 'pointer' : null)
           .onNodeClick(node => {
             // Aim at node from outside it
@@ -95,6 +131,158 @@
             linkForce.distance(link => settings.distance);
             graph.numDimensions(3);
           }
+
+          // WebSocket connection for live updates
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${protocol}//${window.location.host}/ws`;
+          const statusDiv = document.getElementById('connection-status');
+          let ws;
+          let reconnectInterval = 1000;
+          const maxReconnectInterval = 30000;
+          let currentData = { nodes: [], links: [] };
+          let isInitialized = false;
+
+          function updateStatus(status, color) {
+            statusDiv.textContent = status;
+            statusDiv.style.backgroundColor = color;
+            statusDiv.style.color = color === '#4CAF50' ? 'white' : 'black';
+          }
+
+          function nodeEquals(a, b) {
+            return a.id === b.id && 
+                   a.name === b.name && 
+                   a.type === b.type && 
+                   a.namespace === b.namespace && 
+                   a.status === b.status && 
+                   a.statusmessage === b.statusmessage;
+          }
+
+          function linkEquals(a, b) {
+            return a.source === b.source && 
+                   a.target === b.target && 
+                   a.value === b.value;
+          }
+
+          function updateGraphData(newData) {
+            if (!isInitialized) {
+              // First time - load all data
+              graph.graphData(newData);
+              currentData = JSON.parse(JSON.stringify(newData));
+              isInitialized = true;
+              return;
+            }
+
+            const currentNodes = currentData.nodes || [];
+            const currentLinks = currentData.links || [];
+            const newNodes = newData.nodes || [];
+            const newLinks = newData.links || [];
+
+            // Check for structural changes (additions/removals)
+            const nodeIdsChanged = currentNodes.length !== newNodes.length ||
+              !currentNodes.every(n => newNodes.some(nn => nn.id === n.id)) ||
+              !newNodes.every(n => currentNodes.some(nn => nn.id === n.id));
+
+            const linkIdsChanged = currentLinks.length !== newLinks.length ||
+              !currentLinks.every(l => newLinks.some(nl => nl.source === l.source && nl.target === l.target)) ||
+              !newLinks.every(l => currentLinks.some(nl => nl.source === l.source && nl.target === l.target));
+
+            // If structure changed, do full update
+            if (nodeIdsChanged || linkIdsChanged) {
+              console.log('Graph structure changed, doing full update');
+              graph.graphData(newData);
+              currentData = JSON.parse(JSON.stringify(newData));
+              return;
+            }
+
+            // Check for property changes only
+            let hasChanges = false;
+            const changedNodes = [];
+
+            for (let i = 0; i < newNodes.length; i++) {
+              const currentNode = currentNodes.find(n => n.id === newNodes[i].id);
+              if (currentNode && !nodeEquals(currentNode, newNodes[i])) {
+                hasChanges = true;
+                changedNodes.push(newNodes[i]);
+              }
+            }
+
+            // Check for link property changes
+            for (let i = 0; i < newLinks.length; i++) {
+              const currentLink = currentLinks.find(l => 
+                l.source === newLinks[i].source && l.target === newLinks[i].target
+              );
+              if (currentLink && !linkEquals(currentLink, newLinks[i])) {
+                hasChanges = true;
+                break;
+              }
+            }
+
+            if (hasChanges) {
+              console.log('Graph properties changed, updating...', { changedNodesCount: changedNodes.length });
+              
+              // Update the graph data - the library will handle minimal re-rendering
+              graph.graphData(newData);
+              currentData = JSON.parse(JSON.stringify(newData));
+            } else {
+              console.log('No changes detected, skipping update');
+            }
+          }
+
+          function connectWebSocket() {
+            updateStatus('Connecting...', '#FFC107');
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+              console.log('WebSocket connected');
+              updateStatus('Connected (Live)', '#4CAF50');
+              reconnectInterval = 1000; // Reset reconnect interval on successful connection
+            };
+            
+            ws.onmessage = function(event) {
+              try {
+                const data = JSON.parse(event.data);
+                const timestamp = new Date().toLocaleTimeString();
+                console.log(`[${timestamp}] Received data:`, data.nodes?.length, 'nodes,', data.links?.length, 'links');
+                updateGraphData(data);
+                updateStatus(`Connected (Live) - ${timestamp}`, '#4CAF50');
+              } catch (error) {
+                console.error('Error parsing WebSocket data:', error);
+                updateStatus('Data Error', '#F44336');
+              }
+            };
+            
+            ws.onclose = function() {
+              console.log('WebSocket disconnected, attempting to reconnect...');
+              updateStatus('Reconnecting...', '#FF9800');
+              setTimeout(connectWebSocket, reconnectInterval);
+              reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
+            };
+            
+            ws.onerror = function(error) {
+              console.error('WebSocket error:', error);
+              updateStatus('Connection Error', '#F44336');
+            };
+          }
+
+          // Add better lighting for visibility
+          const scene = graph.scene();
+          
+          // Add ambient light for overall brightness
+          const ambientLight = new THREE.AmbientLight(0x404040, 0.6); // Soft white light
+          scene.add(ambientLight);
+          
+          // Add directional light for better 3D definition
+          const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+          directionalLight.position.set(100, 100, 100);
+          scene.add(directionalLight);
+          
+          // Add another directional light from opposite side
+          const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+          directionalLight2.position.set(-100, -100, -100);
+          scene.add(directionalLight2);
+
+          // Start WebSocket connection
+          connectWebSocket();
     </script>
   </body>
 
