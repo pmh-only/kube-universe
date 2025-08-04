@@ -1,40 +1,29 @@
-# Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.24.5 as builder
-
-ARG GOARCH=''
-ARG GITHUB_PAT=''
+FROM golang:1.24.5 AS builder
 
 WORKDIR /workspace
-RUN go install github.com/rakyll/statik@latest
 
-# Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+COPY go.mod go.sum .
+RUN go install github.com/rakyll/statik
 
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     go mod download
 
-# Copy the go source
-COPY cmd/ cmd/
-COPY pkg/ pkg/
+COPY cmd/    cmd/
+COPY pkg/    pkg/
 COPY statik/ statik/
-COPY web/ web/
-COPY main.go main.go
+COPY main.go .
 
-ARG TARGETOS
-ARG TARGETARCH
-
-# Build
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags="-s -w" -a -o kube-universe main.go
+    CGO_ENABLED=0 go build -ldflags="-s -w" .
 
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
+FROM scratch AS final
+
+USER 1000:1000
+
+WORKDIR /app
+
 COPY --from=builder /workspace/kube-universe .
-USER 65532:65532
 
-ENTRYPOINT ["./kube-universe"]
+ENTRYPOINT ["/app/kube-universe"]
