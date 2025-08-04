@@ -18,11 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	kutype "github.com/afritzler/kube-universe/pkg/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -56,13 +58,46 @@ const (
 	relationshipAccesses    = "accesses"     // A accesses B (domain accesses ingress)
 )
 
+// getKubernetesConfig returns a Kubernetes config, prioritizing in-cluster config
+func getKubernetesConfig(kubeconfig string) (*rest.Config, error) {
+	// First, try to use in-cluster config (when running as a pod with ServiceAccount)
+	if config, err := rest.InClusterConfig(); err == nil {
+		fmt.Println("Using in-cluster Kubernetes configuration (ServiceAccount)")
+		return config, nil
+	}
+	
+	// If in-cluster config fails, try to use provided kubeconfig
+	if kubeconfig != "" {
+		fmt.Printf("Using provided kubeconfig: %s\n", kubeconfig)
+		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+	
+	// If no kubeconfig provided, try default locations
+	if kubeconfigPath := os.Getenv("KUBECONFIG"); kubeconfigPath != "" {
+		fmt.Printf("Using KUBECONFIG environment variable: %s\n", kubeconfigPath)
+		return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	}
+	
+	// Try default kubeconfig location
+	if homeDir := os.Getenv("HOME"); homeDir != "" {
+		defaultKubeconfig := homeDir + "/.kube/config"
+		if _, err := os.Stat(defaultKubeconfig); err == nil {
+			fmt.Printf("Using default kubeconfig: %s\n", defaultKubeconfig)
+			return clientcmd.BuildConfigFromFlags("", defaultKubeconfig)
+		}
+	}
+	
+	return nil, fmt.Errorf("unable to find kubernetes configuration: not running in-cluster and no kubeconfig found")
+}
+
 // GetGraph returns the rendered dependency graph
 func GetGraph(kubeconfig string) ([]byte, error) {
-	// use the current context in kubeconfig
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	ctx := context.Background()
+	
+	// Try to get Kubernetes config - prioritize in-cluster config if available
+	config, err := getKubernetesConfig(kubeconfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load kubeconfig: %s", err)
+		return nil, fmt.Errorf("failed to load kubernetes config: %s", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)

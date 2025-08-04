@@ -17,7 +17,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -46,11 +45,8 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kube-universe.yaml)")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-	if home := homeDir(); home != "" {
-		rootCmd.PersistentFlags().StringVarP(&kubeconfig, "kubeconfig", "k", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		rootCmd.PersistentFlags().StringVarP(&kubeconfig, "kubeconfig", "k", "", "absolute path to the kubeconfig file")
-	}
+	// Make kubeconfig optional - will auto-detect in-cluster config or use defaults
+	rootCmd.PersistentFlags().StringVarP(&kubeconfig, "kubeconfig", "k", "", "(optional) absolute path to the kubeconfig file. If not provided, will use in-cluster config or default locations")
 	if err := viper.BindPFlag("kubeconfig", rootCmd.PersistentFlags().Lookup("kubeconfig")); err != nil {
 		panic(fmt.Sprintf("faild to bind kubeconfig flag: %s", err))
 	}
