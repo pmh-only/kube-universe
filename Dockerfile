@@ -27,3 +27,4 @@ WORKDIR /app
 COPY --from=builder /workspace/kube-universe .
 
 ENTRYPOINT ["/app/kube-universe"]
+CMD ["serve"]
