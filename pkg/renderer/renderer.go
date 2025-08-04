@@ -48,14 +48,14 @@ const (
 
 // Relationship types for links
 const (
-	relationshipContains    = "contains"     // A contains B (namespace contains pod)
-	relationshipInstanceOf  = "instance_of"  // A is instance of B (pod is instance of replicaset)
-	relationshipDependsOn   = "depends_on"   // A depends on B (pod depends on configmap)
-	relationshipExposes     = "exposes"      // A exposes B (service exposes pod)
-	relationshipRoutes      = "routes"       // A routes to B (ingress routes to service)
-	relationshipManages     = "manages"      // A manages B (deployment manages replicaset)
-	relationshipRuns        = "runs"         // A runs on B (pod runs on node)
-	relationshipAccesses    = "accesses"     // A accesses B (domain accesses ingress)
+	relationshipContains   = "contains"    // A contains B (namespace contains pod)
+	relationshipInstanceOf = "instance_of" // A is instance of B (pod is instance of replicaset)
+	relationshipDependsOn  = "depends_on"  // A depends on B (pod depends on configmap)
+	relationshipExposes    = "exposes"     // A exposes B (service exposes pod)
+	relationshipRoutes     = "routes"      // A routes to B (ingress routes to service)
+	relationshipManages    = "manages"     // A manages B (deployment manages replicaset)
+	relationshipRuns       = "runs"        // A runs on B (pod runs on node)
+	relationshipAccesses   = "accesses"    // A accesses B (domain accesses ingress)
 )
 
 // getKubernetesConfig returns a Kubernetes config, prioritizing in-cluster config
@@ -65,19 +65,19 @@ func getKubernetesConfig(kubeconfig string) (*rest.Config, error) {
 		fmt.Println("Using in-cluster Kubernetes configuration (ServiceAccount)")
 		return config, nil
 	}
-	
+
 	// If in-cluster config fails, try to use provided kubeconfig
 	if kubeconfig != "" {
 		fmt.Printf("Using provided kubeconfig: %s\n", kubeconfig)
 		return clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
-	
+
 	// If no kubeconfig provided, try default locations
 	if kubeconfigPath := os.Getenv("KUBECONFIG"); kubeconfigPath != "" {
 		fmt.Printf("Using KUBECONFIG environment variable: %s\n", kubeconfigPath)
 		return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	}
-	
+
 	// Try default kubeconfig location
 	if homeDir := os.Getenv("HOME"); homeDir != "" {
 		defaultKubeconfig := homeDir + "/.kube/config"
@@ -86,14 +86,14 @@ func getKubernetesConfig(kubeconfig string) (*rest.Config, error) {
 			return clientcmd.BuildConfigFromFlags("", defaultKubeconfig)
 		}
 	}
-	
+
 	return nil, fmt.Errorf("unable to find kubernetes configuration: not running in-cluster and no kubeconfig found")
 }
 
 // GetGraph returns the rendered dependency graph
 func GetGraph(kubeconfig string) ([]byte, error) {
 	ctx := context.Background()
-	
+
 	// Try to get Kubernetes config - prioritize in-cluster config if available
 	config, err := getKubernetesConfig(kubeconfig)
 	if err != nil {
@@ -117,7 +117,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		key := fmt.Sprintf("%s-%s", namespaceType, n.Name)
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["phase"] = string(n.Status.Phase)
-		
+
 		nodes[key] = &kutype.Node{
 			Id:           key,
 			Name:         n.Name,
@@ -139,7 +139,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 	for _, n := range clusterNodes.Items {
 		key := fmt.Sprintf("%s-%s", nodeType, n.Name)
 		resourceInfo := make(map[string]interface{})
-		
+
 		// Node capacity and allocatable resources
 		if cpu := n.Status.Capacity["cpu"]; cpu.String() != "" {
 			resourceInfo["cpu_capacity"] = cpu.String()
@@ -150,7 +150,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		if storage := n.Status.Capacity["ephemeral-storage"]; storage.String() != "" {
 			resourceInfo["storage_capacity"] = storage.String()
 		}
-		
+
 		// Node conditions
 		conditions := make([]string, 0)
 		for _, condition := range n.Status.Conditions {
@@ -162,7 +162,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		resourceInfo["kernel_version"] = n.Status.NodeInfo.KernelVersion
 		resourceInfo["os_image"] = n.Status.NodeInfo.OSImage
 		resourceInfo["container_runtime"] = n.Status.NodeInfo.ContainerRuntimeVersion
-		
+
 		nodes[key] = &kutype.Node{
 			Id:           key,
 			Name:         n.Name,
@@ -186,7 +186,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		podKey := fmt.Sprintf("%s-%s-%s", podType, p.Namespace, p.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, p.Namespace)
 		nodeKey := fmt.Sprintf("%s-%s", nodeType, p.Spec.NodeName)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["containers"] = len(p.Spec.Containers)
 		resourceInfo["restart_count"] = 0
@@ -194,14 +194,14 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		resourceInfo["service_account"] = p.Spec.ServiceAccountName
 		resourceInfo["host_network"] = p.Spec.HostNetwork
 		resourceInfo["dns_policy"] = string(p.Spec.DNSPolicy)
-		
+
 		// Calculate total restart count
 		totalRestarts := int32(0)
 		for _, containerStatus := range p.Status.ContainerStatuses {
 			totalRestarts += containerStatus.RestartCount
 		}
 		resourceInfo["restart_count"] = totalRestarts
-		
+
 		// Pod IP and Host IP
 		if p.Status.PodIP != "" {
 			resourceInfo["pod_ip"] = p.Status.PodIP
@@ -209,10 +209,10 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		if p.Status.HostIP != "" {
 			resourceInfo["host_ip"] = p.Status.HostIP
 		}
-		
+
 		// QoS Class
 		resourceInfo["qos_class"] = string(p.Status.QOSClass)
-		
+
 		nodes[podKey] = &kutype.Node{
 			Id:            podKey,
 			Name:          p.Name,
@@ -240,18 +240,18 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 	for _, s := range services.Items {
 		serviceKey := fmt.Sprintf("%s-%s-%s", serviceType, s.Namespace, s.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, s.Namespace)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["service_type"] = string(s.Spec.Type)
 		resourceInfo["cluster_ip"] = s.Spec.ClusterIP
 		resourceInfo["ports"] = len(s.Spec.Ports)
 		resourceInfo["session_affinity"] = string(s.Spec.SessionAffinity)
-		
+
 		// External IPs
 		if len(s.Spec.ExternalIPs) > 0 {
 			resourceInfo["external_ips"] = s.Spec.ExternalIPs
 		}
-		
+
 		// Load balancer info
 		if s.Spec.Type == "LoadBalancer" {
 			if len(s.Status.LoadBalancer.Ingress) > 0 {
@@ -264,7 +264,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 				}
 			}
 		}
-		
+
 		// Port details
 		portDetails := make([]map[string]interface{}, 0)
 		for _, port := range s.Spec.Ports {
@@ -280,7 +280,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			portDetails = append(portDetails, portInfo)
 		}
 		resourceInfo["port_details"] = portDetails
-		
+
 		nodes[serviceKey] = &kutype.Node{
 			Id:           serviceKey,
 			Name:         s.Name,
@@ -304,16 +304,16 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 	for _, ing := range ingresses.Items {
 		ingressKey := fmt.Sprintf("%s-%s-%s", ingressType, ing.Namespace, ing.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, ing.Namespace)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["rules"] = len(ing.Spec.Rules)
 		resourceInfo["tls"] = len(ing.Spec.TLS)
-		
+
 		// Ingress class
 		if ing.Spec.IngressClassName != nil {
 			resourceInfo["ingress_class"] = *ing.Spec.IngressClassName
 		}
-		
+
 		// Load balancer info
 		if len(ing.Status.LoadBalancer.Ingress) > 0 {
 			lbIngress := ing.Status.LoadBalancer.Ingress[0]
@@ -324,7 +324,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 				resourceInfo["load_balancer_hostname"] = lbIngress.Hostname
 			}
 		}
-		
+
 		nodes[ingressKey] = &kutype.Node{
 			Id:           ingressKey,
 			Name:         ing.Name,
@@ -343,14 +343,14 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			// Create domain node for each host
 			if rule.Host != "" {
 				domainKey := fmt.Sprintf("%s-%s", domainType, rule.Host)
-				
+
 				// Only create domain node if it doesn't exist yet
 				if _, exists := nodes[domainKey]; !exists {
 					domainResourceInfo := make(map[string]interface{})
 					domainResourceInfo["hostname"] = rule.Host
 					domainResourceInfo["type"] = "external_domain"
 					domainResourceInfo["description"] = fmt.Sprintf("External domain: %s", rule.Host)
-					
+
 					nodes[domainKey] = &kutype.Node{
 						Id:           domainKey,
 						Name:         rule.Host,
@@ -363,11 +363,11 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 						ResourceInfo: domainResourceInfo,
 					}
 				}
-				
+
 				// Link domain to ingress
 				links = append(links, kutype.Link{Source: domainKey, Target: ingressKey, Value: 0, Relationship: relationshipAccesses})
 			}
-			
+
 			// Link ingresses to services
 			if rule.HTTP != nil {
 				for _, path := range rule.HTTP.Paths {
@@ -390,12 +390,12 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 	for _, es := range endpointSlices.Items {
 		esKey := fmt.Sprintf("%s-%s-%s", endpointSliceType, es.Namespace, es.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, es.Namespace)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["address_type"] = string(es.AddressType)
 		resourceInfo["endpoints"] = len(es.Endpoints)
 		resourceInfo["ports"] = len(es.Ports)
-		
+
 		nodes[esKey] = &kutype.Node{
 			Id:           esKey,
 			Name:         es.Name,
@@ -416,7 +416,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 				links = append(links, kutype.Link{Source: serviceKey, Target: esKey, Value: 0, Relationship: relationshipExposes})
 			}
 		}
-		
+
 		// Link endpoint slices to pods
 		for _, endpoint := range es.Endpoints {
 			if endpoint.TargetRef != nil && endpoint.TargetRef.Kind == "Pod" {
@@ -436,7 +436,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 	for _, sa := range serviceAccounts.Items {
 		saKey := fmt.Sprintf("%s-%s-%s", serviceAccountType, sa.Namespace, sa.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, sa.Namespace)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["secrets"] = len(sa.Secrets)
 		resourceInfo["image_pull_secrets"] = len(sa.ImagePullSecrets)
@@ -444,7 +444,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		if sa.AutomountServiceAccountToken != nil {
 			resourceInfo["automount_service_account_token"] = *sa.AutomountServiceAccountToken
 		}
-		
+
 		nodes[saKey] = &kutype.Node{
 			Id:           saKey,
 			Name:         sa.Name,
@@ -468,7 +468,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		deploymentKey := fmt.Sprintf("%s-%s-%s", deploymentType, d.Namespace, d.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, d.Namespace)
 		status := fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, d.Status.Replicas)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["replicas"] = d.Status.Replicas
 		resourceInfo["ready_replicas"] = d.Status.ReadyReplicas
@@ -476,11 +476,11 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		resourceInfo["unavailable_replicas"] = d.Status.UnavailableReplicas
 		resourceInfo["updated_replicas"] = d.Status.UpdatedReplicas
 		resourceInfo["strategy_type"] = string(d.Spec.Strategy.Type)
-		
+
 		if d.Spec.Replicas != nil {
 			resourceInfo["desired_replicas"] = *d.Spec.Replicas
 		}
-		
+
 		// Deployment conditions
 		conditions := make([]string, 0)
 		for _, condition := range d.Status.Conditions {
@@ -489,7 +489,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			}
 		}
 		resourceInfo["conditions"] = conditions
-		
+
 		nodes[deploymentKey] = &kutype.Node{
 			Id:           deploymentKey,
 			Name:         d.Name,
@@ -514,7 +514,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		rsKey := fmt.Sprintf("%s-%s-%s", replicaSetType, rs.Namespace, rs.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, rs.Namespace)
 		status := fmt.Sprintf("%d/%d", rs.Status.ReadyReplicas, rs.Status.Replicas)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["replicas"] = rs.Status.Replicas
 		resourceInfo["ready_replicas"] = rs.Status.ReadyReplicas
@@ -523,7 +523,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		if rs.Spec.Replicas != nil {
 			resourceInfo["desired_replicas"] = *rs.Spec.Replicas
 		}
-		
+
 		nodes[rsKey] = &kutype.Node{
 			Id:           rsKey,
 			Name:         rs.Name,
@@ -558,7 +558,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		dsKey := fmt.Sprintf("%s-%s-%s", daemonSetType, ds.Namespace, ds.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, ds.Namespace)
 		status := fmt.Sprintf("%d/%d", ds.Status.NumberReady, ds.Status.DesiredNumberScheduled)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["desired_number_scheduled"] = ds.Status.DesiredNumberScheduled
 		resourceInfo["current_number_scheduled"] = ds.Status.CurrentNumberScheduled
@@ -567,7 +567,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		resourceInfo["number_unavailable"] = ds.Status.NumberUnavailable
 		resourceInfo["number_misscheduled"] = ds.Status.NumberMisscheduled
 		resourceInfo["update_strategy"] = string(ds.Spec.UpdateStrategy.Type)
-		
+
 		nodes[dsKey] = &kutype.Node{
 			Id:           dsKey,
 			Name:         ds.Name,
@@ -592,7 +592,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		ssKey := fmt.Sprintf("%s-%s-%s", statefulSetType, ss.Namespace, ss.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, ss.Namespace)
 		status := fmt.Sprintf("%d/%d", ss.Status.ReadyReplicas, ss.Status.Replicas)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["replicas"] = ss.Status.Replicas
 		resourceInfo["ready_replicas"] = ss.Status.ReadyReplicas
@@ -604,7 +604,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		if ss.Spec.Replicas != nil {
 			resourceInfo["desired_replicas"] = *ss.Spec.Replicas
 		}
-		
+
 		nodes[ssKey] = &kutype.Node{
 			Id:           ssKey,
 			Name:         ss.Name,
@@ -628,12 +628,12 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 	for _, cm := range configMaps.Items {
 		cmKey := fmt.Sprintf("%s-%s-%s", configMapType, cm.Namespace, cm.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, cm.Namespace)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["data_keys"] = len(cm.Data)
 		resourceInfo["binary_data_keys"] = len(cm.BinaryData)
 		resourceInfo["total_keys"] = len(cm.Data) + len(cm.BinaryData)
-		
+
 		// Calculate total data size (approximate)
 		totalSize := 0
 		for _, value := range cm.Data {
@@ -643,7 +643,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			totalSize += len(value)
 		}
 		resourceInfo["total_size_bytes"] = totalSize
-		
+
 		// List key names (limit to first 10 for display)
 		keyNames := make([]string, 0)
 		for key := range cm.Data {
@@ -658,7 +658,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			}
 		}
 		resourceInfo["key_names"] = keyNames
-		
+
 		nodes[cmKey] = &kutype.Node{
 			Id:           cmKey,
 			Name:         cm.Name,
@@ -681,13 +681,13 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 	for _, secret := range secrets.Items {
 		secretKey := fmt.Sprintf("%s-%s-%s", secretType, secret.Namespace, secret.Name)
 		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, secret.Namespace)
-		
+
 		resourceInfo := make(map[string]interface{})
 		resourceInfo["secret_type"] = string(secret.Type)
 		resourceInfo["data_keys"] = len(secret.Data)
 		resourceInfo["string_data_keys"] = len(secret.StringData)
 		resourceInfo["total_keys"] = len(secret.Data) + len(secret.StringData)
-		
+
 		// Calculate total data size (approximate)
 		totalSize := 0
 		for _, value := range secret.Data {
@@ -697,7 +697,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			totalSize += len(value)
 		}
 		resourceInfo["total_size_bytes"] = totalSize
-		
+
 		// List key names (limit to first 10 for display, don't show values for security)
 		keyNames := make([]string, 0)
 		for key := range secret.Data {
@@ -712,7 +712,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			}
 		}
 		resourceInfo["key_names"] = keyNames
-		
+
 		nodes[secretKey] = &kutype.Node{
 			Id:           secretKey,
 			Name:         secret.Name,
@@ -721,8 +721,8 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			Status:       string(secret.Type),
 			CreationTime: secret.CreationTimestamp.Format(time.RFC3339),
 			Age:          calculateAge(secret.CreationTimestamp),
-			Labels:       secret.Labels,
-			Annotations:  secret.Annotations,
+			Labels:       map[string]string{},
+			Annotations:  map[string]string{},
 			ResourceInfo: resourceInfo,
 		}
 		links = append(links, kutype.Link{Source: namespaceKey, Target: secretKey, Value: 0, Relationship: relationshipContains})
@@ -793,9 +793,9 @@ func calculateAge(creationTime metav1.Time) string {
 	if creationTime.IsZero() {
 		return "Unknown"
 	}
-	
+
 	duration := time.Since(creationTime.Time)
-	
+
 	if duration < time.Minute {
 		return fmt.Sprintf("%.0fs", duration.Seconds())
 	} else if duration < time.Hour {
@@ -810,7 +810,7 @@ func calculateAge(creationTime metav1.Time) string {
 // formatResourceRequests formats CPU and memory requests/limits
 func formatResourceRequests(containers []interface{}) map[string]interface{} {
 	info := make(map[string]interface{})
-	
+
 	// This is a simplified version - in a real implementation you'd parse the resource requirements
 	// For now, we'll just return container count
 	info["containers"] = len(containers)
@@ -818,6 +818,6 @@ func formatResourceRequests(containers []interface{}) map[string]interface{} {
 	info["memory_requests"] = "N/A"
 	info["cpu_limits"] = "N/A"
 	info["memory_limits"] = "N/A"
-	
+
 	return info
 }
