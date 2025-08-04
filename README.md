@@ -1,19 +1,24 @@
-> [!NOTE]  
-> This is the fork of [kube-universe by afritzler](https://github.com/afritzler/kube-universe). see original repository for more information.
+<div align=center>
 
-# kube-universe
+![logo](docs/logo.png)
 
-![kube universe logo](images/logo_small.png)
+# kube-universe (improved)
 
----
-
-![demo](images/demo.png)
+</div>
 
 ## Overview
 
-Kube-Universe renders a Kubernetes cluster into a dynamic 3D graph. An example landscape visualization can be found [here](images/universe.png).
+Kube-Universe renders a Kubernetes cluster into a dynamic 3D graph.
 
-A __Live Demo Version__ is available [here](https://afritzler.github.io/kube-universe/web/demo/)
+## Try it now!!
+A __Live Demo Version__ is available [here](https://visualized.pmh.codes)
+
+## Gallery
+> you can enlarge the image by clicking on it
+
+| [![gallery1](docs/gallery1.png)](docs/gallery1.png) | [![gallery2](docs/gallery2.png)](docs/gallery2.png) |
+| :--: | :--: |
+| [![gallery3](docs/gallery3.png)](docs/gallery3.png) | [![gallery4](docs/gallery4.png)](docs/gallery4.png) |
 
 ## Features
 
@@ -34,19 +39,23 @@ A __Live Demo Version__ is available [here](https://afritzler.github.io/kube-uni
 
 Try `kube-universe` with Kubernetes Manifest file
 
-```yaml
-# TODO
+```sh
+kubectl apply -f https://raw.githubusercontent.com/afritzler/kube-universe/master/docs/deploy_full.yaml
+kubectl port-forward -n kube-universe svc/kube-universe-service 3000:3000
 ```
+
+and open http://127.0.0.1:3000 in your browser
 
 ## Development
 
 To build and run `kube-universe` from source
 
-```bash
+```sh
 statik -f -src=./web/
-go run *.go serve --kubeconfig=PATH_TO_MY_KUBECONFIG
+go run main.go serve
 ```
 
 ## Acknowledgements
 
-Kube universe is using [3d-force-graph](https://github.com/vasturiano/3d-force-graph) for rendering.
+* Kube universe is using [3d-force-graph](https://github.com/vasturiano/3d-force-graph) for rendering.
+* This is a friendly fork of [kube-universe by afritzler](https://github.com/afritzler/kube-universe).

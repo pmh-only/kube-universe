@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-universe 
+  namespace: kube-universe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-universe 
+  template:
+    metadata:
+      labels:
+        app: kube-universe 
+    spec:
+      serviceAccountName: kube-universe
+      containers:
+      - name: kube-universe
+        image: ghcr.io/pmh-only/kube-universe:latest
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-universe
+  namespace: kube-universe
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-universe-cr
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - nodes
+      - pods
+      - services
+      - serviceaccounts
+      - configmaps
+      - secrets
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+      - daemonsets
+      - statefulsets
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-universe-crb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-universe-cr
+subjects:
+  - kind: ServiceAccount
+    name: kube-universe
+    namespace: kube-universe
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-universe-service
+  namespace: kube-universe
+spec:
+  selector:
+    app: kube-universe
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
