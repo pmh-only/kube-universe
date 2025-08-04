@@ -1,11 +1,14 @@
 package websocket
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/afritzler/kube-universe/pkg/delta"
 	renderer "github.com/afritzler/kube-universe/pkg/renderer"
+	kutype "github.com/afritzler/kube-universe/pkg/types"
 	"github.com/gorilla/websocket"
 )
 
@@ -16,12 +19,13 @@ var upgrader = websocket.Upgrader{
 }
 
 type Hub struct {
-	clients    map[*Client]bool
-	broadcast  chan []byte
-	register   chan *Client
-	unregister chan *Client
-	kubeconfig string
-	lastData   []byte
+	clients      map[*Client]bool
+	broadcast    chan []byte
+	register     chan *Client
+	unregister   chan *Client
+	kubeconfig   string
+	lastData     []byte
+	deltaTracker *delta.DeltaTracker
 }
 
 type Client struct {
@@ -32,12 +36,13 @@ type Client struct {
 
 func NewHub(kubeconfig string) *Hub {
 	return &Hub{
-		clients:    make(map[*Client]bool),
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		kubeconfig: kubeconfig,
-		lastData:   nil,
+		clients:      make(map[*Client]bool),
+		broadcast:    make(chan []byte),
+		register:     make(chan *Client),
+		unregister:   make(chan *Client),
+		kubeconfig:   kubeconfig,
+		lastData:     nil,
+		deltaTracker: delta.NewDeltaTracker(),
 	}
 }
 
@@ -92,13 +97,39 @@ func (h *Hub) fetchAndBroadcast() {
 		return
 	}
 
-	// Only broadcast if data has changed
-	if h.lastData == nil || !bytesEqual(h.lastData, data) {
-		log.Printf("Graph data changed, broadcasting to %d clients", len(h.clients))
-		h.lastData = make([]byte, len(data))
-		copy(h.lastData, data)
-		h.broadcast <- data
+	// Parse the graph data
+	var graph kutype.Graph
+	if err := json.Unmarshal(data, &graph); err != nil {
+		log.Printf("Failed to parse graph data: %v", err)
+		return
 	}
+
+	// Generate delta
+	deltaUpdate, err := h.deltaTracker.GenerateDelta(&graph)
+	if err != nil {
+		log.Printf("Failed to generate delta: %v", err)
+		return
+	}
+
+	// If no changes, don't broadcast
+	if deltaUpdate == nil {
+		return
+	}
+
+	// Convert delta to JSON
+	deltaJSON, err := deltaUpdate.ToJSON()
+	if err != nil {
+		log.Printf("Failed to marshal delta: %v", err)
+		return
+	}
+
+	// Broadcast delta
+	log.Printf("Broadcasting %s update to %d clients", deltaUpdate.Type, len(h.clients))
+	h.broadcast <- deltaJSON
+	
+	// Update lastData for backward compatibility
+	h.lastData = make([]byte, len(data))
+	copy(h.lastData, data)
 }
 
 func bytesEqual(a, b []byte) bool {
@@ -120,6 +151,27 @@ func (h *Hub) sendInitialData(client *Client) {
 		return
 	}
 
+	// Parse the graph data
+	var graph kutype.Graph
+	if err := json.Unmarshal(data, &graph); err != nil {
+		log.Printf("Failed to parse initial graph data: %v", err)
+		return
+	}
+
+	// For new clients, always send a full update
+	fullUpdate := &delta.DeltaUpdate{
+		Type:  "full",
+		Nodes: *graph.Nodes,
+		Links: *graph.Links,
+	}
+
+	// Convert to JSON
+	fullUpdateJSON, err := fullUpdate.ToJSON()
+	if err != nil {
+		log.Printf("Failed to marshal initial data: %v", err)
+		return
+	}
+
 	// Store the data as lastData if it's the first client
 	if h.lastData == nil {
 		h.lastData = make([]byte, len(data))
@@ -127,7 +179,9 @@ func (h *Hub) sendInitialData(client *Client) {
 	}
 
 	select {
-	case client.send <- data:
+	case client.send <- fullUpdateJSON:
+		log.Printf("Sent initial full update to new client (%d nodes, %d links)", 
+			len(*graph.Nodes), len(*graph.Links))
 	default:
 		close(client.send)
 		delete(h.clients, client)
@@ -210,4 +264,16 @@ func (c *Client) writePump() {
 			}
 		}
 	}
+}
+// ResetDeltaTracker resets the delta tracker state
+func (h *Hub) ResetDeltaTracker() {
+	h.deltaTracker.Reset()
+	log.Printf("Delta tracker reset")
+}
+
+// GetDeltaStats returns delta tracker statistics
+func (h *Hub) GetDeltaStats() map[string]int {
+	stats := h.deltaTracker.GetStats()
+	stats["connected_clients"] = len(h.clients)
+	return stats
 }

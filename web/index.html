@@ -367,6 +367,77 @@
       text-align: center;
       line-height: 1.3;
     }
+    
+    /* Loading overlay styles */
+    #loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(33, 33, 33, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      backdrop-filter: blur(5px);
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+    
+    #loading-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+    
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(102, 204, 255, 0.3);
+      border-top: 4px solid #66ccff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+      color: #66ccff;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    
+    .loading-subtext {
+      color: #aaa;
+      font-size: 14px;
+      text-align: center;
+      max-width: 300px;
+      line-height: 1.4;
+    }
+    
+    /* Mobile responsive loading */
+    @media (max-width: 768px) {
+      .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border-width: 3px;
+      }
+      
+      .loading-text {
+        font-size: 16px;
+      }
+      
+      .loading-subtext {
+        font-size: 12px;
+        max-width: 250px;
+      }
+    }
   </style>
   <script src="/js/three.min.js"></script>
   <script src="/js/three-spritetext.min.js"></script>
@@ -375,6 +446,13 @@
 </head>
 
 <body>
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading Kubernetes Universe</div>
+    <div class="loading-subtext">Connecting to cluster and building 3D visualization...</div>
+  </div>
+
   <!-- Sidebar for detailed resource information -->
   <div id="sidebar">
     <button class="sidebar-close" id="sidebar-close-btn">&times;</button>
@@ -989,7 +1067,11 @@
             node, // lookAt the clicked node
             1000  // ms transition duration - slightly faster for zoom
           );
-        });
+        })
+        .cooldownTicks(Infinity) // Keep physics engine running indefinitely
+        .cooldownTime(15000) // Never stop the physics simulation
+        .d3AlphaDecay(0.01) // Prevent alpha from decaying (keeps simulation active)
+        .d3VelocityDecay(0.3); // Control velocity decay for smoother movement
 
         const linkForce = graph
           .d3Force('link')
@@ -1083,12 +1165,46 @@
           const filteredNodes = data.nodes.filter(node => !hiddenResourceTypes.has(node.type));
           const nodeIds = new Set(filteredNodes.map(node => node.id));
           
+          // Debug logging for link filtering
+          const allLinks = data.links || [];
+          console.log('Filtering links:', {
+            totalLinks: allLinks.length,
+            visibleNodeIds: Array.from(nodeIds).slice(0, 5), // Show first 5 for debugging
+            hiddenRelationshipTypes: Array.from(hiddenRelationshipTypes)
+          });
+          
           // Filter links by node visibility and relationship type
-          const filteredLinks = data.links.filter(link => 
-            nodeIds.has(link.source) && 
-            nodeIds.has(link.target) &&
-            !hiddenRelationshipTypes.has(link.relationship)
-          );
+          const filteredLinks = allLinks.filter(link => {
+            // Handle both string IDs and object references (3D graph converts strings to objects)
+            const sourceId = typeof link.source === 'string' ? link.source : link.source?.id;
+            const targetId = typeof link.target === 'string' ? link.target : link.target?.id;
+            
+            const sourceVisible = nodeIds.has(sourceId);
+            const targetVisible = nodeIds.has(targetId);
+            const relationshipVisible = !hiddenRelationshipTypes.has(link.relationship);
+            
+            const isVisible = sourceVisible && targetVisible && relationshipVisible;
+            
+            // Log first few link filtering decisions
+            if (allLinks.indexOf(link) < 3) {
+              console.log(`Link ${sourceId} -> ${targetId} (${link.relationship}):`, {
+                sourceId,
+                targetId,
+                sourceVisible,
+                targetVisible,
+                relationshipVisible,
+                isVisible
+              });
+            }
+            
+            return isVisible;
+          });
+          
+          console.log('Link filtering result:', {
+            inputLinks: allLinks.length,
+            outputLinks: filteredLinks.length,
+            filteredOut: allLinks.length - filteredLinks.length
+          });
           
           return {
             nodes: filteredNodes,
@@ -1097,9 +1213,37 @@
         }
 
         function applyFilterAndUpdate() {
+          console.log('applyFilterAndUpdate called with originalData:', {
+            hasOriginalData: !!originalData,
+            originalNodes: originalData?.nodes?.length || 0,
+            originalLinks: originalData?.links?.length || 0
+          });
+          
+          if (!originalData) {
+            console.warn('No originalData available for filtering');
+            return;
+          }
+          
           const filteredData = filterGraphData(originalData);
-          currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+          
+          if (!isInitialized) {
+            // First time initialization
+            graph.graphData(filteredData);
+            currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+            return;
+          }
+          
+          // For filter changes, do direct graph update (not incremental)
+          // This ensures proper filtering without incremental update conflicts
           graph.graphData(filteredData);
+          currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+          
+          console.log('Filter applied:', {
+            visibleNodes: filteredData.nodes.length,
+            visibleLinks: filteredData.links.length,
+            hiddenTypes: Array.from(hiddenResourceTypes),
+            hiddenRelationships: Array.from(hiddenRelationshipTypes)
+          });
         }
 
         function toggleResourceType(type) {
@@ -1154,6 +1298,8 @@
             hiddenResourceTypes.add(type);
             item.classList.add('disabled');
           });
+          
+          // For hide all, we can directly set empty data since it's a complete clear
           currentFilteredData = { nodes: [], links: [] };
           graph.graphData({ nodes: [], links: [] });
           
@@ -1284,6 +1430,41 @@
           }
         });
 
+        /*
+         * WebSocket Message Format for Delta Updates:
+         * 
+         * Full Update (initial load or reset):
+         * {
+         *   "type": "full",  // optional, defaults to full if not specified
+         *   "nodes": [...],  // all nodes
+         *   "links": [...]   // all links
+         * }
+         * 
+         * Delta Update (incremental changes):
+         * {
+         *   "type": "delta",
+         *   "nodes": [...],           // new or updated nodes
+         *   "links": [...],           // new links
+         *   "removed_nodes": [...],   // nodes to remove (can be IDs or full objects)
+         *   "removed_links": [...]    // links to remove: [{"source": "id1", "target": "id2"}, ...]
+         * }
+         * 
+         * Example Delta Update:
+         * {
+         *   "type": "delta",
+         *   "nodes": [
+         *     {"id": "pod-123", "name": "nginx-pod", "status": "Running", ...}
+         *   ],
+         *   "removed_nodes": ["pod-456"],
+         *   "links": [
+         *     {"source": "deployment-1", "target": "pod-123", "relationship": "manages"}
+         *   ],
+         *   "removed_links": [
+         *     {"source": "deployment-1", "target": "pod-456"}
+         *   ]
+         * }
+         */
+
         // WebSocket connection for live updates
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -1315,7 +1496,255 @@
                  a.value === b.value;
         }
 
+        function hideLoadingOverlay() {
+          const loadingOverlay = document.getElementById('loading-overlay');
+          if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
+            loadingOverlay.classList.add('hidden');
+            console.log('Loading overlay hidden - graph data received');
+          }
+        }
+
+        // Performance monitoring for incremental updates
+        let updateStats = {
+          totalUpdates: 0,
+          incrementalUpdates: 0,
+          fullUpdates: 0,
+          deltaUpdates: 0,
+          lastUpdateTime: 0
+        };
+
+        function logUpdatePerformance(updateType, startTime, details = {}) {
+          const duration = performance.now() - startTime;
+          updateStats.totalUpdates++;
+          updateStats.lastUpdateTime = duration;
+          
+          if (updateType === 'delta') {
+            updateStats.deltaUpdates++;
+          } else if (updateType.startsWith('incremental')) {
+            updateStats.incrementalUpdates++;
+          } else {
+            updateStats.fullUpdates++;
+          }
+          
+          console.log(`${updateType} update completed in ${duration.toFixed(2)}ms`, details);
+          
+          // Log stats every 10 updates
+          if (updateStats.totalUpdates % 10 === 0) {
+            console.log('Update performance stats:', {
+              total: updateStats.totalUpdates,
+              delta: updateStats.deltaUpdates,
+              incremental: updateStats.incrementalUpdates,
+              full: updateStats.fullUpdates,
+              deltaRatio: `${((updateStats.deltaUpdates / updateStats.totalUpdates) * 100).toFixed(1)}%`,
+              avgLastUpdateTime: `${updateStats.lastUpdateTime.toFixed(2)}ms`
+            });
+          }
+        }
+
+        function applyDeltaUpdate(deltaData) {
+          const startTime = performance.now();
+          
+          if (!originalData) {
+            console.warn('No original data available for delta update, treating as full update');
+            updateGraphData({ nodes: deltaData.nodes || [], links: deltaData.links || [] });
+            return;
+          }
+          
+          // Apply delta changes to original data
+          const updatedOriginalData = applyDeltaToOriginalData(deltaData);
+          
+          // Update resource and relationship counts
+          updateResourceCounts(updatedOriginalData);
+          updateRelationshipCounts(updatedOriginalData);
+          
+          // If we're currently updating from a toggle action, skip the graph update
+          if (isUpdatingFromToggle) {
+            console.log('Skipping delta graph update - toggle in progress');
+            return;
+          }
+          
+          // Apply filtering to the updated data
+          const filteredData = filterGraphData(updatedOriginalData);
+          
+          // Apply the delta directly to the graph
+          applyDeltaToGraph(deltaData, filteredData);
+          
+          logUpdatePerformance('delta', startTime, {
+            nodesAdded: deltaData.nodes?.length || 0,
+            linksAdded: deltaData.links?.length || 0,
+            nodesRemoved: deltaData.removed_nodes?.length || 0,
+            linksRemoved: deltaData.removed_links?.length || 0
+          });
+        }
+
+        function applyDeltaToOriginalData(deltaData) {
+          // Create a copy of original data to modify
+          const updatedData = {
+            nodes: [...originalData.nodes],
+            links: [...originalData.links]
+          };
+          
+          // Remove nodes
+          if (deltaData.removed_nodes && deltaData.removed_nodes.length > 0) {
+            const removedNodeIds = new Set(deltaData.removed_nodes.map(n => n.id || n));
+            updatedData.nodes = updatedData.nodes.filter(node => !removedNodeIds.has(node.id));
+          }
+          
+          // Remove links
+          if (deltaData.removed_links && deltaData.removed_links.length > 0) {
+            const removedLinkKeys = new Set(deltaData.removed_links.map(l => `${l.source}-${l.target}`));
+            updatedData.links = updatedData.links.filter(link => 
+              !removedLinkKeys.has(`${link.source}-${link.target}`)
+            );
+          }
+          
+          // Add or update nodes
+          if (deltaData.nodes && deltaData.nodes.length > 0) {
+            const nodeMap = new Map(updatedData.nodes.map(n => [n.id, n]));
+            
+            deltaData.nodes.forEach(newNode => {
+              const existingNode = nodeMap.get(newNode.id);
+              if (existingNode) {
+                // Update existing node
+                Object.assign(existingNode, newNode);
+              } else {
+                // Add new node
+                updatedData.nodes.push(newNode);
+              }
+            });
+          }
+          
+          // Add new links
+          if (deltaData.links && deltaData.links.length > 0) {
+            const existingLinkKeys = new Set(updatedData.links.map(l => `${l.source}-${l.target}`));
+            
+            deltaData.links.forEach(newLink => {
+              const linkKey = `${newLink.source}-${newLink.target}`;
+              if (!existingLinkKeys.has(linkKey)) {
+                updatedData.links.push(newLink);
+              }
+            });
+          }
+          
+          // Update original data reference
+          originalData = updatedData;
+          return updatedData;
+        }
+
+        function applyDeltaToGraph(deltaData, filteredData) {
+          const currentGraphData = graph.graphData();
+          const currentNodes = [...currentGraphData.nodes];
+          const currentLinks = [...currentGraphData.links];
+          
+          let graphChanged = false;
+          
+          // Remove nodes from graph (and their links)
+          if (deltaData.removed_nodes && deltaData.removed_nodes.length > 0) {
+            const removedNodeIds = new Set(deltaData.removed_nodes.map(n => n.id || n));
+            
+            // Remove nodes
+            for (let i = currentNodes.length - 1; i >= 0; i--) {
+              if (removedNodeIds.has(currentNodes[i].id)) {
+                currentNodes.splice(i, 1);
+                graphChanged = true;
+              }
+            }
+            
+            // Remove associated links
+            for (let i = currentLinks.length - 1; i >= 0; i--) {
+              const link = currentLinks[i];
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              if (removedNodeIds.has(sourceId) || removedNodeIds.has(targetId)) {
+                currentLinks.splice(i, 1);
+                graphChanged = true;
+              }
+            }
+          }
+          
+          // Remove specific links
+          if (deltaData.removed_links && deltaData.removed_links.length > 0) {
+            const removedLinkKeys = new Set(deltaData.removed_links.map(l => `${l.source}-${l.target}`));
+            
+            for (let i = currentLinks.length - 1; i >= 0; i--) {
+              const link = currentLinks[i];
+              const sourceId = link.source.id || link.source;
+              const targetId = link.target.id || link.target;
+              const linkKey = `${sourceId}-${targetId}`;
+              
+              if (removedLinkKeys.has(linkKey)) {
+                currentLinks.splice(i, 1);
+                graphChanged = true;
+              }
+            }
+          }
+          
+          // Add or update nodes (only if they pass the filter)
+          if (deltaData.nodes && deltaData.nodes.length > 0) {
+            const filteredNodeIds = new Set(filteredData.nodes.map(n => n.id));
+            const currentNodeMap = new Map(currentNodes.map(n => [n.id, n]));
+            
+            deltaData.nodes.forEach(newNode => {
+              // Only add/update if the node passes the current filter
+              if (filteredNodeIds.has(newNode.id)) {
+                const existingNode = currentNodeMap.get(newNode.id);
+                if (existingNode) {
+                  // Update existing node properties
+                  Object.assign(existingNode, newNode);
+                } else {
+                  // Add new node
+                  currentNodes.push(newNode);
+                  graphChanged = true;
+                }
+              }
+            });
+          }
+          
+          // Add new links (only if both nodes are visible)
+          if (deltaData.links && deltaData.links.length > 0) {
+            const visibleNodeIds = new Set(currentNodes.map(n => n.id));
+            const existingLinkKeys = new Set(currentLinks.map(l => {
+              const sourceId = l.source.id || l.source;
+              const targetId = l.target.id || l.target;
+              return `${sourceId}-${targetId}`;
+            }));
+            
+            deltaData.links.forEach(newLink => {
+              const linkKey = `${newLink.source}-${newLink.target}`;
+              
+              // Only add if both nodes are visible and link doesn't exist
+              if (visibleNodeIds.has(newLink.source) && 
+                  visibleNodeIds.has(newLink.target) && 
+                  !existingLinkKeys.has(linkKey) &&
+                  !hiddenRelationshipTypes.has(newLink.relationship)) {
+                currentLinks.push(newLink);
+                graphChanged = true;
+              }
+            });
+          }
+          
+          // Update graph if changes were made
+          if (graphChanged) {
+            graph.graphData({
+              nodes: currentNodes,
+              links: currentLinks
+            });
+            
+            // Update cached filtered data
+            currentFilteredData = {
+              nodes: [...currentNodes],
+              links: [...currentLinks]
+            };
+          }
+        }
+
         function updateGraphData(newData) {
+          // Quick check if data is identical to avoid unnecessary processing
+          if (originalData && JSON.stringify(originalData) === JSON.stringify(newData)) {
+            console.log('Identical data received, skipping update');
+            return;
+          }
+          
           // Store original data for filtering
           originalData = JSON.parse(JSON.stringify(newData));
           
@@ -1334,65 +1763,150 @@
           
           if (!isInitialized) {
             // First time - load filtered data
+            const startTime = performance.now();
             graph.graphData(filteredData);
             currentFilteredData = JSON.parse(JSON.stringify(filteredData));
             isInitialized = true;
+            logUpdatePerformance('full-initial', startTime, {
+              totalNodes: filteredData.nodes.length,
+              totalLinks: filteredData.links.length
+            });
             return;
           }
 
-          const currentNodes = currentFilteredData.nodes || [];
-          const currentLinks = currentFilteredData.links || [];
-          const newNodes = filteredData.nodes || [];
-          const newLinks = filteredData.links || [];
+          // Perform incremental update using the current graph data
+          performIncrementalUpdate(filteredData);
+        }
 
-          // Check for structural changes (additions/removals)
-          const nodeIdsChanged = currentNodes.length !== newNodes.length ||
-            !currentNodes.every(n => newNodes.some(nn => nn.id === n.id)) ||
-            !newNodes.every(n => currentNodes.some(nn => nn.id === n.id));
+        function performIncrementalUpdate(newFilteredData) {
+          const startTime = performance.now();
+          
+          // Get current graph data directly from the graph instance
+          const currentGraphData = graph.graphData();
+          const currentNodes = currentGraphData.nodes || [];
+          const currentLinks = currentGraphData.links || [];
+          const newNodes = newFilteredData.nodes || [];
+          const newLinks = newFilteredData.links || [];
 
-          const linkIdsChanged = currentLinks.length !== newLinks.length ||
-            !currentLinks.every(l => newLinks.some(nl => nl.source === l.source && nl.target === l.target)) ||
-            !newLinks.every(l => currentLinks.some(nl => nl.source === l.source && nl.target === l.target));
+          // Create maps for efficient lookups
+          const currentNodeMap = new Map(currentNodes.map(n => [n.id, n]));
+          const newNodeMap = new Map(newNodes.map(n => [n.id, n]));
+          const currentLinkMap = new Map(currentLinks.map(l => [`${l.source.id || l.source}-${l.target.id || l.target}`, l]));
+          const newLinkMap = new Map(newLinks.map(l => [`${l.source}-${l.target}`, l]));
 
-          // If structure changed, do full update
-          if (nodeIdsChanged || linkIdsChanged) {
-            console.log('Graph structure changed, doing full update');
-            graph.graphData(filteredData);
-            currentFilteredData = JSON.parse(JSON.stringify(filteredData));
-            return;
-          }
+          // Track changes
+          const nodesToAdd = [];
+          const nodesToUpdate = [];
+          const nodesToRemove = [];
+          const linksToAdd = [];
+          const linksToRemove = [];
 
-          // Check for property changes only
-          let hasChanges = false;
-          const changedNodes = [];
-
-          for (let i = 0; i < newNodes.length; i++) {
-            const currentNode = currentNodes.find(n => n.id === newNodes[i].id);
-            if (currentNode && !nodeEquals(currentNode, newNodes[i])) {
-              hasChanges = true;
-              changedNodes.push(newNodes[i]);
+          // Find nodes to add or update
+          newNodes.forEach(newNode => {
+            const currentNode = currentNodeMap.get(newNode.id);
+            if (!currentNode) {
+              nodesToAdd.push(newNode);
+            } else if (!nodeEquals(currentNode, newNode)) {
+              // Update existing node properties in place
+              Object.assign(currentNode, newNode);
+              nodesToUpdate.push(currentNode);
             }
-          }
+          });
 
-          // Check for link property changes
-          for (let i = 0; i < newLinks.length; i++) {
-            const currentLink = currentLinks.find(l => 
-              l.source === newLinks[i].source && l.target === newLinks[i].target
-            );
-            if (currentLink && !linkEquals(currentLink, newLinks[i])) {
-              hasChanges = true;
-              break;
+          // Find nodes to remove
+          currentNodes.forEach(currentNode => {
+            if (!newNodeMap.has(currentNode.id)) {
+              nodesToRemove.push(currentNode);
             }
-          }
+          });
 
-          if (hasChanges) {
-            console.log('Graph properties changed, updating...', { changedNodesCount: changedNodes.length });
-            
-            // Update the graph data with filtered data - the library will handle minimal re-rendering
-            graph.graphData(filteredData);
-            currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+          // Find links to add
+          newLinks.forEach(newLink => {
+            const linkKey = `${newLink.source}-${newLink.target}`;
+            if (!currentLinkMap.has(linkKey)) {
+              linksToAdd.push(newLink);
+            }
+          });
+
+          // Find links to remove
+          currentLinks.forEach(currentLink => {
+            const sourceId = currentLink.source.id || currentLink.source;
+            const targetId = currentLink.target.id || currentLink.target;
+            const linkKey = `${sourceId}-${targetId}`;
+            if (!newLinkMap.has(linkKey)) {
+              linksToRemove.push(currentLink);
+            }
+          });
+
+          // Apply incremental changes
+          let hasStructuralChanges = nodesToAdd.length > 0 || nodesToRemove.length > 0 || 
+                                   linksToAdd.length > 0 || linksToRemove.length > 0;
+          let hasPropertyChanges = nodesToUpdate.length > 0;
+
+          const changeDetails = {
+            nodesToAdd: nodesToAdd.length,
+            nodesToUpdate: nodesToUpdate.length,
+            nodesToRemove: nodesToRemove.length,
+            linksToAdd: linksToAdd.length,
+            linksToRemove: linksToRemove.length,
+            totalNodes: newNodes.length,
+            totalLinks: newLinks.length
+          };
+
+          if (hasStructuralChanges || hasPropertyChanges) {
+            if (hasStructuralChanges) {
+              // For structural changes, we need to update the entire graph data
+              // but the 3d-force-graph library will handle incremental rendering internally
+              const updatedNodes = [...currentNodes];
+              const updatedLinks = [...currentLinks];
+
+              // Remove nodes and their associated links
+              nodesToRemove.forEach(nodeToRemove => {
+                const nodeIndex = updatedNodes.findIndex(n => n.id === nodeToRemove.id);
+                if (nodeIndex !== -1) {
+                  updatedNodes.splice(nodeIndex, 1);
+                }
+              });
+
+              // Remove links
+              linksToRemove.forEach(linkToRemove => {
+                const sourceId = linkToRemove.source.id || linkToRemove.source;
+                const targetId = linkToRemove.target.id || linkToRemove.target;
+                const linkIndex = updatedLinks.findIndex(l => {
+                  const lSourceId = l.source.id || l.source;
+                  const lTargetId = l.target.id || l.target;
+                  return lSourceId === sourceId && lTargetId === targetId;
+                });
+                if (linkIndex !== -1) {
+                  updatedLinks.splice(linkIndex, 1);
+                }
+              });
+
+              // Add new nodes
+              updatedNodes.push(...nodesToAdd);
+
+              // Add new links
+              updatedLinks.push(...linksToAdd);
+
+              // Update graph with new structure
+              graph.graphData({
+                nodes: updatedNodes,
+                links: updatedLinks
+              });
+              
+              logUpdatePerformance('incremental-structural', startTime, changeDetails);
+            } else if (hasPropertyChanges) {
+              // For property-only changes, trigger a refresh without changing structure
+              // The node properties have already been updated in place above
+              graph.refresh();
+              
+              logUpdatePerformance('incremental-properties', startTime, changeDetails);
+            }
+
+            // Update our cached filtered data
+            currentFilteredData = JSON.parse(JSON.stringify(newFilteredData));
           } else {
-            console.log('No changes detected, skipping update');
+            logUpdatePerformance('incremental-no-changes', startTime, changeDetails);
           }
         }
 
@@ -1410,8 +1924,28 @@
             try {
               const data = JSON.parse(event.data);
               const timestamp = new Date().toLocaleTimeString();
-              console.log(`[${timestamp}] Received data:`, data.nodes?.length, 'nodes,', data.links?.length, 'links');
-              updateGraphData(data);
+              
+              // Hide loading overlay on first data received
+              if (!isInitialized) {
+                hideLoadingOverlay();
+                isInitialized = true;
+              }
+              
+              // Handle different message types
+              if (data.type === 'delta') {
+                console.log(`[${timestamp}] Received delta:`, {
+                  nodes: data.nodes?.length || 0,
+                  links: data.links?.length || 0,
+                  removedNodes: data.removed_nodes?.length || 0,
+                  removedLinks: data.removed_links?.length || 0
+                });
+                applyDeltaUpdate(data);
+              } else {
+                // Backward compatibility: treat as full update if no type specified
+                console.log(`[${timestamp}] Received full data:`, data.nodes?.length, 'nodes,', data.links?.length, 'links');
+                updateGraphData(data);
+              }
+              
               updateStatus(`Connected (Live) - ${timestamp}`, '#4CAF50');
             } catch (error) {
               console.error('Error parsing WebSocket data:', error);
@@ -1699,5 +2233,32 @@
 
         // Set initial size
         graph.width(window.innerWidth).height(window.innerHeight);
+
+        // Physics engine is configured to never stop with infinite cooldown settings
+
+        // Add manual physics restart function for debugging
+        window.restartPhysics = function() {
+          graph.d3ReheatSimulation();
+          console.log('Physics engine restarted manually');
+        };
+
+        // Add physics status monitoring
+        window.getPhysicsStatus = function() {
+          const simulation = graph.d3Force('center');
+          if (simulation && simulation.alpha) {
+            const alpha = simulation.alpha();
+            const status = {
+              alpha: alpha,
+              isRunning: alpha > 0.005, // D3 default alpha threshold
+              nodes: graph.graphData().nodes.length,
+              links: graph.graphData().links.length
+            };
+            console.log('Physics Status:', status);
+            return status;
+          }
+          return { error: 'Physics engine not available' };
+        };
+
+        // Physics monitoring removed - engine configured to run indefinitely
   </script>
 </body>

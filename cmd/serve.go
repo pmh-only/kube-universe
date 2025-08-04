@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -86,6 +87,15 @@ func serve() {
 
 	// Add websocket endpoint
 	http.HandleFunc("/ws", hub.HandleWebSocket)
+	
+	// Add delta stats endpoint for debugging
+	http.HandleFunc("/delta-stats", func(writer http.ResponseWriter, request *http.Request) {
+		stats := hub.GetDeltaStats()
+		writer.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(writer).Encode(stats); err != nil {
+			fmt.Printf("failed to write delta stats: %s", err)
+		}
+	})
 
 	if err := http.ListenAndServe(getPort(), nil); err != nil {
 		panic(fmt.Sprintf("faild to start server: %s", err))
