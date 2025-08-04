@@ -20,16 +20,23 @@ type Graph struct {
 }
 
 type Node struct {
-	Id            string `json:"id"`
-	Namespace     string `json:"namespace"`
-	Name          string `json:"name"`
-	Type          string `json:"type"`
-	Status        string `json:"status,omitempty"`
-	StatusMessage string `json:"statusmessage,omitempty"`
+	Id            string            `json:"id"`
+	Namespace     string            `json:"namespace"`
+	Name          string            `json:"name"`
+	Type          string            `json:"type"`
+	Status        string            `json:"status,omitempty"`
+	StatusMessage string            `json:"statusmessage,omitempty"`
+	CreationTime  string            `json:"creationtime,omitempty"`
+	Age           string            `json:"age,omitempty"`
+	Labels        map[string]string `json:"labels,omitempty"`
+	Annotations   map[string]string `json:"annotations,omitempty"`
+	// Resource-specific information
+	ResourceInfo  map[string]interface{} `json:"resourceinfo,omitempty"`
 }
 
 type Link struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
-	Value  int    `json:"value"`
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	Value        int    `json:"value"`
+	Relationship string `json:"relationship,omitempty"`
 }

@@ -1,288 +1,1703 @@
 
 <head>
-    <style> 
-      body { 
-        margin: 0; 
-        background-color: #1a1a1a; /* Dark background for better contrast */
-      } 
-    </style>
-    <script src="/js/three.min.js"></script>
-    <script src="/js/three-spritetext.min.js"></script>
-    <script src="/js/3d-force-graph.min.js"></script>
-    <script src="/js/dat.gui.js"></script>
-  </head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style> 
+    body { 
+      margin: 0; 
+      background-color: #212121; /* Dark background for better contrast */
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    
+    #sidebar {
+      position: fixed;
+      top: 0;
+      left: -400px; /* Hidden by default */
+      width: 400px;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      color: white;
+      z-index: 1001;
+      transition: left 0.3s ease;
+      border-right: 1px solid #444;
+      backdrop-filter: blur(10px);
+      overflow-y: auto;
+    }
+    
+    #sidebar.open {
+      left: 0;
+    }
+    
+    /* Mobile responsive sidebar */
+    @media (max-width: 768px) {
+      #sidebar {
+        width: 100vw;
+        left: -100vw;
+      }
+      
+      #sidebar.open {
+        left: 0;
+      }
+    }
+    
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid #444;
+      background: rgba(102, 204, 255, 0.1);
+    }
+    
+    .sidebar-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #66ccff;
+      margin: 0 0 8px 0;
+    }
+    
+    .sidebar-subtitle {
+      font-size: 14px;
+      color: #aaa;
+      margin: 0;
+    }
+    
+    .sidebar-content {
+      padding: 20px;
+    }
+    
+    .sidebar-section {
+      margin-bottom: 20px;
+    }
+    
+    .sidebar-section-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #66ccff;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #333;
+    }
+    
+    .sidebar-item {
+      margin-bottom: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    
+    .sidebar-label {
+      color: #99ff66;
+      font-weight: bold;
+      display: inline-block;
+      min-width: 120px;
+    }
+    
+    .sidebar-value {
+      color: #fff;
+    }
+    
+    .sidebar-close {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: none;
+      border: none;
+      color: #66ccff;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 5px;
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .sidebar-close:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    /* Mobile responsive sidebar close button */
+    @media (max-width: 768px) {
+      .sidebar-close {
+        top: 10px;
+        right: 10px;
+        font-size: 28px;
+        min-width: 48px;
+        min-height: 48px;
+      }
+    }
+    
+    .sidebar-labels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 5px;
+    }
+    
+    .sidebar-label-item {
+      background: rgba(102, 204, 255, 0.2);
+      color: #66ccff;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      border: 1px solid rgba(102, 204, 255, 0.3);
+    }
+    
+    .sidebar-status {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      display: inline-block;
+    }
+    
+    .status-running { background: rgba(68, 255, 68, 0.2); color: #44ff44; }
+    .status-failed { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+    .status-pending { background: rgba(255, 136, 68, 0.2); color: #ff8844; }
+    .status-default { background: rgba(170, 170, 170, 0.2); color: #aaa; }
+    
+    .legend-line {
+      width: 20px;
+      height: 3px;
+      margin-right: 8px;
+      border-radius: 1px;
+    }
+    
+    .relationship-count {
+      font-size: 9px;
+      color: #888;
+      margin-left: auto;
+    }
+    
+    .legend-section {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #333;
+    }
+    
+    #connection-status {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      z-index: 1000;
+    }
+    
+    /* Mobile responsive connection status */
+    @media (max-width: 768px) {
+      #connection-status {
+        top: 5px;
+        left: 5px;
+        padding: 6px 8px;
+        font-size: 10px;
+        border-radius: 3px;
+      }
+    }
+    
+    #legend {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      max-width: 220px;
+      z-index: 1000;
+      border: 1px solid #444;
+      backdrop-filter: blur(5px);
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    
+    /* Mobile legend toggle button */
+    #legend-toggle {
+      display: none;
+      position: fixed;
+      top: 5px;
+      right: 5px;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      border: 1px solid #444;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 1001;
+      backdrop-filter: blur(5px);
+    }
+    
+    #legend-toggle:hover {
+      background: rgba(102, 204, 255, 0.2);
+    }
+    
+    /* Mobile responsive legend */
+    @media (max-width: 768px) {
+      #legend-toggle {
+        display: block;
+      }
+      
+      #legend {
+        top: 50px;
+        right: 5px;
+        left: 5px;
+        max-width: none;
+        width: auto;
+        font-size: 10px;
+        padding: 8px;
+        max-height: 50vh;
+        transform: translateY(-100%);
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+      }
+      
+      #legend.mobile-open {
+        transform: translateY(0);
+        opacity: 1;
+        visibility: visible;
+      }
+      
+      .legend-item {
+        padding: 4px 6px;
+        margin-bottom: 6px;
+        font-size: 11px;
+      }
+      
+      .legend-controls {
+        flex-direction: column;
+        gap: 4px;
+      }
+      
+      .legend-button {
+        padding: 6px 8px;
+        font-size: 9px;
+      }
+      
+      .help-text {
+        font-size: 8px;
+        line-height: 1.2;
+      }
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+      user-select: none;
+    }
+    
+    .legend-item:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .legend-item.disabled {
+      opacity: 0.4;
+      background-color: rgba(255, 0, 0, 0.1);
+    }
+    
+    .legend-item.disabled:hover {
+      background-color: rgba(255, 0, 0, 0.2);
+    }
+    
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      margin-right: 8px;
+      border-radius: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .legend-title {
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #66ccff;
+      text-align: center;
+    }
+    
+    .legend-controls {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #444;
+      display: flex;
+      gap: 8px;
+    }
+    
+    .legend-button {
+      background: rgba(102, 204, 255, 0.2);
+      border: 1px solid #66ccff;
+      color: #66ccff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+      transition: all 0.2s ease;
+      flex: 1;
+      text-align: center;
+    }
+    
+    .legend-button:hover {
+      background: rgba(102, 204, 255, 0.3);
+      color: white;
+    }
+    
+    .resource-count {
+      font-size: 9px;
+      color: #888;
+      margin-left: auto;
+    }
+    
+    .help-text {
+      font-size: 9px;
+      color: #666;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #333;
+      text-align: center;
+      line-height: 1.3;
+    }
+  </style>
+  <script src="/js/three.min.js"></script>
+  <script src="/js/three-spritetext.min.js"></script>
+  <script src="/js/3d-force-graph.min.js"></script>
+  <script src="/js/dat.gui.js"></script>
+</head>
 
-  <body>
-    <div id="connection-status" style="position: fixed; top: 10px; right: 10px; padding: 8px 12px; border-radius: 4px; font-family: Arial, sans-serif; font-size: 12px; z-index: 1000;">
-      Connecting...
+<body>
+  <!-- Sidebar for detailed resource information -->
+  <div id="sidebar">
+    <button class="sidebar-close" id="sidebar-close-btn">&times;</button>
+    <div class="sidebar-header">
+      <h2 class="sidebar-title" id="sidebar-resource-name">Resource Details</h2>
+      <p class="sidebar-subtitle" id="sidebar-resource-type">Select a resource to view details</p>
     </div>
-    <div id="3d-graph"></div>
+    <div class="sidebar-content" id="sidebar-content">
+      <p style="color: #666; text-align: center; margin-top: 50px;">Click on any resource in the 3D view to see detailed information here.</p>
+    </div>
+  </div>
 
-    <script>
-      const elem = document.getElementById('3d-graph');
-      const graph = ForceGraph3D()(elem)
-          .backgroundColor('#0a0a0a') // Very dark background for contrast
-          .nodeLabel(function(n){
-            if (n.type == "pod" && n.hasOwnProperty('status') && n.status != "Running") {
-              return n.name + '<br/> Status: ' + n.status + '<br/> StatusMsg: ' + n.statusmessage
-            } else {
-              return n.name
-            }
-          })
-          .nodeOpacity(1)
-          .nodeColor(function(n){
-            // Use bright, consistent colors for each type
-            if (n.type == "namespace") {
-              return '#66ccff'; // Bright cyan for namespaces
-            } else if (n.type == "pod") {
-              if (n.status === "Running") return '#44ff44'; // Bright green for running
-              if (n.status === "Failed") return '#ff4444'; // Bright red for failed
-              return '#ff8844'; // Bright orange for other states
-            } else if (n.type == "node") {
-              return '#4488ff'; // Bright blue for nodes
-            }
-            return '#ffffff'; // Default white
-          })
-          .nodeThreeObject(function(n){
-            if (n.type == "pod" && n.hasOwnProperty('status')
-              && n.status != "Running" && n.status != "Succeeded") {
-              // Bright red/orange for failed pods
-              var mesh = new THREE.Mesh(
-                new THREE.DodecahedronGeometry(20),
-                new THREE.MeshPhongMaterial({
-                  color: n.status === "Failed" ? 0xff4444 : 0xff8844,
-                  emissive: n.status === "Failed" ? 0x441111 : 0x442211,
-                  shininess: 100,
-                  transparent: false,
-                  opacity: 1
-              }))
-              return mesh
-            }
-            if (n.type == "pod" && n.hasOwnProperty('status') && n.status == "Running") {
-              // Bright green for running pods
-              var mesh = new THREE.Mesh(
-                new THREE.SphereGeometry(15),
-                new THREE.MeshPhongMaterial({
-                  color: 0x44ff44,
-                  emissive: 0x114411,
-                  shininess: 100,
-                  transparent: false,
-                  opacity: 1
-              }))
-              return mesh
-            }
-            if (n.type == "node") {
-              // Bright blue for nodes
-              var mesh = new THREE.Mesh(
-                new THREE.BoxGeometry(25,25,25),
-                new THREE.MeshPhongMaterial({
-                  color: 0x4488ff,
-                  emissive: 0x112244,
-                  shininess: 100,
-                  transparent: false,
-                  opacity: 1
-              }))
-              return mesh
-            }
-            if (n.type == "namespace") {
-              const sprite = new SpriteText(n.name);
-              sprite.color = '#ffffff'; // Bright white text
-              sprite.textHeight = 8;
-              sprite.backgroundColor = 'rgba(68, 136, 255, 0.8)'; // Semi-transparent blue background
-              sprite.padding = 4;
-              sprite.borderRadius = 3;
-              return sprite;
-            }
-          })
-          .linkColor(() => '#66ccff') // Bright cyan links
-          .linkWidth(2) // Thicker links for better visibility
-          .linkDirectionalParticles(15) // More particles
-          .linkDirectionalParticleWidth(3) // Brighter particles
-          .linkDirectionalParticleColor(() => '#ffffff') // White particles
-          .numDimensions(3)
-          .nodeResolution(15)
-          .linkDirectionalParticleSpeed(0.008) // Faster particles
-          .linkOpacity(0.8) // Slightly transparent for depth
-          .onNodeHover(node => elem.style.cursor = node ? 'pointer' : null)
-          .onNodeClick(node => {
-            // Aim at node from outside it
-            const distance = 40;
-            const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
-            Graph.cameraPosition(
-              { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
-              node, // lookAt ({ x, y, z })
-              3000  // ms transition duration
-            );
-          });
+  <div id="connection-status">
+    Connecting...
+  </div>
+  
+  <!-- Mobile legend toggle button -->
+  <button id="legend-toggle">☰ Controls</button>
+  
+  <div id="legend">
+    <div class="legend-title">Resource Types</div>
+    <div class="legend-item disabled" data-type="namespace">
+      <div class="legend-color" style="background: #66ccff;"></div>
+      <span>Namespace</span>
+      <span class="resource-count" id="count-namespace">0</span>
+    </div>
+    <div class="legend-item" data-type="domain">
+      <div class="legend-color" style="background: #ff9900;"></div>
+      <span>Domain</span>
+      <span class="resource-count" id="count-domain">0</span>
+    </div>
+    <div class="legend-item" data-type="node">
+      <div class="legend-color" style="background: #4488ff;"></div>
+      <span>Node</span>
+      <span class="resource-count" id="count-node">0</span>
+    </div>
+    <div class="legend-item" data-type="pod">
+      <div class="legend-color" style="background: #44ff44;"></div>
+      <span>Pod</span>
+      <span class="resource-count" id="count-pod">0</span>
+    </div>
+    <div class="legend-item" data-type="service">
+      <div class="legend-color" style="background: #ff66cc;"></div>
+      <span>Service</span>
+      <span class="resource-count" id="count-service">0</span>
+    </div>
+    <div class="legend-item" data-type="ingress">
+      <div class="legend-color" style="background: #ffcc66;"></div>
+      <span>Ingress</span>
+      <span class="resource-count" id="count-ingress">0</span>
+    </div>
+    <div class="legend-item" data-type="deployment">
+      <div class="legend-color" style="background: #ff9966;"></div>
+      <span>Deployment</span>
+      <span class="resource-count" id="count-deployment">0</span>
+    </div>
+    <div class="legend-item" data-type="replicaset">
+      <div class="legend-color" style="background: #99ff66;"></div>
+      <span>ReplicaSet</span>
+      <span class="resource-count" id="count-replicaset">0</span>
+    </div>
+    <div class="legend-item" data-type="daemonset">
+      <div class="legend-color" style="background: #6699ff;"></div>
+      <span>DaemonSet</span>
+      <span class="resource-count" id="count-daemonset">0</span>
+    </div>
+    <div class="legend-item" data-type="statefulset">
+      <div class="legend-color" style="background: #ff6699;"></div>
+      <span>StatefulSet</span>
+      <span class="resource-count" id="count-statefulset">0</span>
+    </div>
+    <div class="legend-item" data-type="configmap">
+      <div class="legend-color" style="background: #ccff66;"></div>
+      <span>ConfigMap</span>
+      <span class="resource-count" id="count-configmap">0</span>
+    </div>
+    <div class="legend-item" data-type="secret">
+      <div class="legend-color" style="background: #ff6666;"></div>
+      <span>Secret</span>
+      <span class="resource-count" id="count-secret">0</span>
+    </div>
+    <div class="legend-item" data-type="serviceaccount">
+      <div class="legend-color" style="background: #66ffcc;"></div>
+      <span>ServiceAccount</span>
+      <span class="resource-count" id="count-serviceaccount">0</span>
+    </div>
+    <div class="legend-item" data-type="endpointslice">
+      <div class="legend-color" style="background: #cc66ff;"></div>
+      <span>EndpointSlice</span>
+      <span class="resource-count" id="count-endpointslice">0</span>
+    </div>
+    <div class="legend-controls">
+      <div class="legend-button" id="show-all">Show All</div>
+      <div class="legend-button" id="hide-all">Hide All</div>
+    </div>
+    
+    <!-- Relationship Legend -->
+    <div class="legend-section">
+      <div class="legend-title" style="margin-top: 15px;">Connection Types</div>
+      <div class="legend-item" data-relationship="contains">
+        <div class="legend-line" style="background: #66ccff; opacity: 0.8;"></div>
+        <span>Contains</span>
+        <span class="relationship-count" id="count-contains">0</span>
+      </div>
+      <div class="legend-item" data-relationship="instance_of">
+        <div class="legend-line" style="background: #44ff44; opacity: 0.9;"></div>
+        <span>Instance Of</span>
+        <span class="relationship-count" id="count-instance_of">0</span>
+      </div>
+      <div class="legend-item" data-relationship="depends_on">
+        <div class="legend-line" style="background: #ff6666; opacity: 0.7;"></div>
+        <span>Depends On</span>
+        <span class="relationship-count" id="count-depends_on">0</span>
+      </div>
+      <div class="legend-item" data-relationship="exposes">
+        <div class="legend-line" style="background: #ff66cc; opacity: 0.8;"></div>
+        <span>Exposes</span>
+        <span class="relationship-count" id="count-exposes">0</span>
+      </div>
+      <div class="legend-item" data-relationship="routes">
+        <div class="legend-line" style="background: #ffcc66; opacity: 0.9;"></div>
+        <span>Routes</span>
+        <span class="relationship-count" id="count-routes">0</span>
+      </div>
+      <div class="legend-item" data-relationship="manages">
+        <div class="legend-line" style="background: #99ff66; opacity: 0.8;"></div>
+        <span>Manages</span>
+        <span class="relationship-count" id="count-manages">0</span>
+      </div>
+      <div class="legend-item" data-relationship="runs">
+        <div class="legend-line" style="background: #6699ff; opacity: 0.7;"></div>
+        <span>Runs On</span>
+        <span class="relationship-count" id="count-runs">0</span>
+      </div>
+      <div class="legend-item" data-relationship="accesses">
+        <div class="legend-line" style="background: #cc66ff; opacity: 0.9;"></div>
+        <span>Accesses</span>
+        <span class="relationship-count" id="count-accesses">0</span>
+      </div>
+    </div>
+    
+    <div class="help-text">
+      Click resource types to toggle visibility<br>
+      Click connection types to toggle relationships<br>
+      Hover for detailed tooltips<br>
+      Click resources to zoom & show details<br>
+      <br>
+      Shortcuts: Ctrl+A (show all), Ctrl+H (hide all)<br>
+      O (domains), P (pods), S (services), D (deployments), etc.
+    </div>
+  </div>
+  
+  <div id="3d-graph"></div>
 
-          const linkForce = graph
-            .d3Force('link')
-            .distance(link => settings.distance);
-
-          // Define GUI
-          const Settings = function() {
-            this.distance = 100;
+  <script>
+    const elem = document.getElementById('3d-graph');
+    const graph = ForceGraph3D()(elem)
+        .backgroundColor('#212121') // Very dark background for contrast
+        .nodeLabel(function(n){
+          let tooltip = `<div style="background: rgba(0,0,0,0.9); color: white; padding: 12px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 12px; max-width: 400px; line-height: 1.4;">`;
+          
+          // Header with name and type
+          tooltip += `<div style="color: #66ccff; font-weight: bold; font-size: 14px; margin-bottom: 8px;">${n.name}</div>`;
+          tooltip += `<div style="color: #ffcc66; margin-bottom: 8px;">Type: ${n.type}</div>`;
+          
+          // Basic info
+          if (n.namespace) {
+            tooltip += `<div style="margin-bottom: 4px;"><span style="color: #99ff66;">Namespace:</span> ${n.namespace}</div>`;
+          }
+          
+          if (n.age) {
+            tooltip += `<div style="margin-bottom: 4px;"><span style="color: #99ff66;">Age:</span> ${n.age}</div>`;
+          }
+          
+          if (n.status) {
+            const statusColor = n.status === 'Running' || n.status.includes('Ready') ? '#44ff44' : 
+                               n.status === 'Failed' || n.status.includes('Error') ? '#ff4444' : '#ff8844';
+            tooltip += `<div style="margin-bottom: 4px;"><span style="color: #99ff66;">Status:</span> <span style="color: ${statusColor};">${n.status}</span></div>`;
+          }
+          
+          if (n.statusmessage) {
+            tooltip += `<div style="margin-bottom: 4px;"><span style="color: #99ff66;">Message:</span> ${n.statusmessage}</div>`;
+          }
+          
+          // Resource-specific information
+          if (n.resourceinfo) {
+            tooltip += `<div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px;">`;
+            
+            // Pod-specific info
+            if (n.type === 'pod') {
+              if (n.resourceinfo.containers) tooltip += `<div><span style="color: #cc66ff;">Containers:</span> ${n.resourceinfo.containers}</div>`;
+              if (n.resourceinfo.restart_count !== undefined) tooltip += `<div><span style="color: #cc66ff;">Restarts:</span> ${n.resourceinfo.restart_count}</div>`;
+              if (n.resourceinfo.node_name) tooltip += `<div><span style="color: #cc66ff;">Node:</span> ${n.resourceinfo.node_name}</div>`;
+              if (n.resourceinfo.pod_ip) tooltip += `<div><span style="color: #cc66ff;">Pod IP:</span> ${n.resourceinfo.pod_ip}</div>`;
+              if (n.resourceinfo.qos_class) tooltip += `<div><span style="color: #cc66ff;">QoS:</span> ${n.resourceinfo.qos_class}</div>`;
+            }
+            
+            // Node-specific info
+            if (n.type === 'node') {
+              if (n.resourceinfo.cpu_capacity) tooltip += `<div><span style="color: #cc66ff;">CPU:</span> ${n.resourceinfo.cpu_capacity}</div>`;
+              if (n.resourceinfo.memory_capacity) tooltip += `<div><span style="color: #cc66ff;">Memory:</span> ${n.resourceinfo.memory_capacity}</div>`;
+              if (n.resourceinfo.storage_capacity) tooltip += `<div><span style="color: #cc66ff;">Storage:</span> ${n.resourceinfo.storage_capacity}</div>`;
+              if (n.resourceinfo.os_image) tooltip += `<div><span style="color: #cc66ff;">OS:</span> ${n.resourceinfo.os_image}</div>`;
+              if (n.resourceinfo.kernel_version) tooltip += `<div><span style="color: #cc66ff;">Kernel:</span> ${n.resourceinfo.kernel_version}</div>`;
+            }
+            
+            // Service-specific info
+            if (n.type === 'service') {
+              if (n.resourceinfo.service_type) tooltip += `<div><span style="color: #cc66ff;">Service Type:</span> ${n.resourceinfo.service_type}</div>`;
+              if (n.resourceinfo.cluster_ip) tooltip += `<div><span style="color: #cc66ff;">Cluster IP:</span> ${n.resourceinfo.cluster_ip}</div>`;
+              if (n.resourceinfo.ports) tooltip += `<div><span style="color: #cc66ff;">Ports:</span> ${n.resourceinfo.ports}</div>`;
+              if (n.resourceinfo.load_balancer_ip) tooltip += `<div><span style="color: #cc66ff;">LB IP:</span> ${n.resourceinfo.load_balancer_ip}</div>`;
+            }
+            
+            // ConfigMap-specific info
+            if (n.type === 'configmap') {
+              if (n.resourceinfo.total_keys) tooltip += `<div><span style="color: #cc66ff;">Keys:</span> ${n.resourceinfo.total_keys}</div>`;
+              if (n.resourceinfo.total_size_bytes) {
+                const sizeKB = Math.round(n.resourceinfo.total_size_bytes / 1024);
+                tooltip += `<div><span style="color: #cc66ff;">Size:</span> ${sizeKB} KB</div>`;
+              }
+              if (n.resourceinfo.key_names && n.resourceinfo.key_names.length > 0) {
+                tooltip += `<div><span style="color: #cc66ff;">Keys:</span> ${n.resourceinfo.key_names.slice(0, 5).join(', ')}${n.resourceinfo.key_names.length > 5 ? '...' : ''}</div>`;
+              }
+            }
+            
+            // Secret-specific info
+            if (n.type === 'secret') {
+              if (n.resourceinfo.secret_type) tooltip += `<div><span style="color: #cc66ff;">Secret Type:</span> ${n.resourceinfo.secret_type}</div>`;
+              if (n.resourceinfo.total_keys) tooltip += `<div><span style="color: #cc66ff;">Keys:</span> ${n.resourceinfo.total_keys}</div>`;
+              if (n.resourceinfo.total_size_bytes) {
+                const sizeKB = Math.round(n.resourceinfo.total_size_bytes / 1024);
+                tooltip += `<div><span style="color: #cc66ff;">Size:</span> ${sizeKB} KB</div>`;
+              }
+            }
+            
+            // Deployment/ReplicaSet/StatefulSet info
+            if (n.type === 'deployment' || n.type === 'replicaset' || n.type === 'statefulset') {
+              if (n.resourceinfo.desired_replicas !== undefined) tooltip += `<div><span style="color: #cc66ff;">Desired:</span> ${n.resourceinfo.desired_replicas}</div>`;
+              if (n.resourceinfo.ready_replicas !== undefined) tooltip += `<div><span style="color: #cc66ff;">Ready:</span> ${n.resourceinfo.ready_replicas}</div>`;
+              if (n.resourceinfo.available_replicas !== undefined) tooltip += `<div><span style="color: #cc66ff;">Available:</span> ${n.resourceinfo.available_replicas}</div>`;
+            }
+            
+            // DaemonSet info
+            if (n.type === 'daemonset') {
+              if (n.resourceinfo.desired_number_scheduled !== undefined) tooltip += `<div><span style="color: #cc66ff;">Desired:</span> ${n.resourceinfo.desired_number_scheduled}</div>`;
+              if (n.resourceinfo.number_ready !== undefined) tooltip += `<div><span style="color: #cc66ff;">Ready:</span> ${n.resourceinfo.number_ready}</div>`;
+              if (n.resourceinfo.number_available !== undefined) tooltip += `<div><span style="color: #cc66ff;">Available:</span> ${n.resourceinfo.number_available}</div>`;
+            }
+            
+            // Ingress info
+            if (n.type === 'ingress') {
+              if (n.resourceinfo.rules) tooltip += `<div><span style="color: #cc66ff;">Rules:</span> ${n.resourceinfo.rules}</div>`;
+              if (n.resourceinfo.tls) tooltip += `<div><span style="color: #cc66ff;">TLS:</span> ${n.resourceinfo.tls}</div>`;
+              if (n.resourceinfo.ingress_class) tooltip += `<div><span style="color: #cc66ff;">Class:</span> ${n.resourceinfo.ingress_class}</div>`;
+            }
+            
+            // EndpointSlice info
+            if (n.type === 'endpointslice') {
+              if (n.resourceinfo.endpoints) tooltip += `<div><span style="color: #cc66ff;">Endpoints:</span> ${n.resourceinfo.endpoints}</div>`;
+              if (n.resourceinfo.address_type) tooltip += `<div><span style="color: #cc66ff;">Address Type:</span> ${n.resourceinfo.address_type}</div>`;
+            }
+            
+            // ServiceAccount info
+            if (n.type === 'serviceaccount') {
+              if (n.resourceinfo.secrets) tooltip += `<div><span style="color: #cc66ff;">Secrets:</span> ${n.resourceinfo.secrets}</div>`;
+              if (n.resourceinfo.image_pull_secrets) tooltip += `<div><span style="color: #cc66ff;">Image Pull Secrets:</span> ${n.resourceinfo.image_pull_secrets}</div>`;
+            }
+            
+            tooltip += `</div>`;
+          }
+          
+          // Labels (show first few)
+          if (n.labels && Object.keys(n.labels).length > 0) {
+            tooltip += `<div style="border-top: 1px solid #444; margin-top: 8px; padding-top: 8px;">`;
+            tooltip += `<div style="color: #ffcc66; margin-bottom: 4px;">Labels:</div>`;
+            const labelEntries = Object.entries(n.labels).slice(0, 3);
+            labelEntries.forEach(([key, value]) => {
+              tooltip += `<div style="font-size: 11px; color: #ccc; margin-left: 8px;">${key}: ${value}</div>`;
+            });
+            if (Object.keys(n.labels).length > 3) {
+              tooltip += `<div style="font-size: 11px; color: #888; margin-left: 8px;">... and ${Object.keys(n.labels).length - 3} more</div>`;
+            }
+            tooltip += `</div>`;
+          }
+          
+          tooltip += `</div>`;
+          return tooltip;
+        })
+        .nodeOpacity(1)
+        .nodeColor(function(n){
+          // Use bright, consistent colors for each type
+          if (n.type == "namespace") {
+            return '#66ccff'; // Bright cyan for namespaces
+          } else if (n.type == "domain") {
+            return '#ff9900'; // Bright orange for domains
+          } else if (n.type == "pod") {
+            if (n.status === "Running") return '#44ff44'; // Bright green for running
+            if (n.status === "Failed") return '#ff4444'; // Bright red for failed
+            return '#ff8844'; // Bright orange for other states
+          } else if (n.type == "node") {
+            return '#4488ff'; // Bright blue for nodes
+          } else if (n.type == "service") {
+            return '#ff66cc'; // Bright magenta for services
+          } else if (n.type == "ingress") {
+            return '#ffcc66'; // Bright yellow for ingresses
+          } else if (n.type == "endpointslice") {
+            return '#cc66ff'; // Bright purple for endpoint slices
+          } else if (n.type == "serviceaccount") {
+            return '#66ffcc'; // Bright teal for service accounts
+          } else if (n.type == "deployment") {
+            return '#ff9966'; // Bright coral for deployments
+          } else if (n.type == "replicaset") {
+            return '#99ff66'; // Bright lime for replica sets
+          } else if (n.type == "daemonset") {
+            return '#6699ff'; // Bright sky blue for daemon sets
+          } else if (n.type == "statefulset") {
+            return '#ff6699'; // Bright pink for stateful sets
+          } else if (n.type == "configmap") {
+            return '#ccff66'; // Bright yellow-green for config maps
+          } else if (n.type == "secret") {
+            return '#ff6666'; // Bright red for secrets
+          }
+          return '#ffffff'; // Default white
+        })
+        .nodeThreeObject(function(n){
+          // Helper function to create a group with mesh and label
+          function createNodeWithLabel(mesh, name, type, yOffset = -20) {
+            const group = new THREE.Group();
+            group.add(mesh);
+            
+            // Create name label
+            const nameSprite = new SpriteText(name);
+            nameSprite.color = '#ffffff';
+            nameSprite.textHeight = 4;
+            nameSprite.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            nameSprite.padding = 2;
+            nameSprite.borderRadius = 2;
+            nameSprite.position.y = yOffset;
+            group.add(nameSprite);
+            
+            // Create type label
+            const typeSprite = new SpriteText(`[${type}]`);
+            typeSprite.color = '#aaaaaa';
+            typeSprite.textHeight = 3;
+            typeSprite.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            typeSprite.padding = 1;
+            typeSprite.borderRadius = 2;
+            typeSprite.position.y = yOffset - 6;
+            group.add(typeSprite);
+            
+            return group;
+          }
+          
+          if (n.type == "domain") {
+            // Bright orange diamond for domains - represents external access points
+            var mesh = new THREE.Mesh(
+              new THREE.OctahedronGeometry(12),
+              new THREE.MeshPhongMaterial({
+                color: 0xff9900,
+                emissive: 0x442200,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -18);
+          }
+          if (n.type == "pod" && n.hasOwnProperty('status')
+            && n.status != "Running" && n.status != "Succeeded") {
+            // Bright red/orange for failed pods
+            var mesh = new THREE.Mesh(
+              new THREE.DodecahedronGeometry(8),
+              new THREE.MeshPhongMaterial({
+                color: n.status === "Failed" ? 0xff4444 : 0xff8844,
+                emissive: n.status === "Failed" ? 0x441111 : 0x442211,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -15);
+          }
+          if (n.type == "pod" && n.hasOwnProperty('status') && n.status == "Running") {
+            // Bright green for running pods
+            var mesh = new THREE.Mesh(
+              new THREE.SphereGeometry(8),
+              new THREE.MeshPhongMaterial({
+                color: 0x44ff44,
+                emissive: 0x114411,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -15);
+          }
+          if (n.type == "node") {
+            // Bright blue for nodes
+            var mesh = new THREE.Mesh(
+              new THREE.BoxGeometry(20,20,20),
+              new THREE.MeshPhongMaterial({
+                color: 0x4488ff,
+                emissive: 0x112244,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -20);
+          }
+          if (n.type == "service") {
+            // Bright magenta cylinder for services
+            var mesh = new THREE.Mesh(
+              new THREE.CylinderGeometry(8, 8, 16),
+              new THREE.MeshPhongMaterial({
+                color: 0xff66cc,
+                emissive: 0x441133,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -18);
+          }
+          if (n.type == "ingress") {
+            // Bright yellow cone for ingresses
+            var mesh = new THREE.Mesh(
+              new THREE.ConeGeometry(10, 16),
+              new THREE.MeshPhongMaterial({
+                color: 0xffcc66,
+                emissive: 0x443311,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -18);
+          }
+          if (n.type == "endpointslice") {
+            // Bright purple octahedron for endpoint slices
+            var mesh = new THREE.Mesh(
+              new THREE.OctahedronGeometry(6),
+              new THREE.MeshPhongMaterial({
+                color: 0xcc66ff,
+                emissive: 0x331144,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -12);
+          }
+          if (n.type == "serviceaccount") {
+            // Bright teal tetrahedron for service accounts
+            var mesh = new THREE.Mesh(
+              new THREE.TetrahedronGeometry(8),
+              new THREE.MeshPhongMaterial({
+                color: 0x66ffcc,
+                emissive: 0x114433,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -15);
+          }
+          if (n.type == "deployment") {
+            // Bright coral box for deployments
+            var mesh = new THREE.Mesh(
+              new THREE.BoxGeometry(14,14,14),
+              new THREE.MeshPhongMaterial({
+                color: 0xff9966,
+                emissive: 0x442211,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -17);
+          }
+          if (n.type == "replicaset") {
+            // Bright lime smaller box for replica sets
+            var mesh = new THREE.Mesh(
+              new THREE.BoxGeometry(10,10,10),
+              new THREE.MeshPhongMaterial({
+                color: 0x99ff66,
+                emissive: 0x224411,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -15);
+          }
+          if (n.type == "daemonset") {
+            // Bright sky blue ring for daemon sets
+            var mesh = new THREE.Mesh(
+              new THREE.TorusGeometry(8, 3),
+              new THREE.MeshPhongMaterial({
+                color: 0x6699ff,
+                emissive: 0x112244,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -15);
+          }
+          if (n.type == "statefulset") {
+            // Bright pink cylinder for stateful sets
+            var mesh = new THREE.Mesh(
+              new THREE.CylinderGeometry(6, 10, 16),
+              new THREE.MeshPhongMaterial({
+                color: 0xff6699,
+                emissive: 0x441122,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -18);
+          }
+          if (n.type == "configmap") {
+            // Bright yellow-green icosahedron for config maps
+            var mesh = new THREE.Mesh(
+              new THREE.IcosahedronGeometry(6),
+              new THREE.MeshPhongMaterial({
+                color: 0xccff66,
+                emissive: 0x334411,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -12);
+          }
+          if (n.type == "secret") {
+            // Bright red dodecahedron for secrets
+            var mesh = new THREE.Mesh(
+              new THREE.DodecahedronGeometry(6),
+              new THREE.MeshPhongMaterial({
+                color: 0xff6666,
+                emissive: 0x441111,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -12);
+          }
+          if (n.type == "namespace") {
+            const sprite = new SpriteText(n.name);
+            sprite.color = '#ffffff'; // Bright white text
+            sprite.textHeight = 8;
+            sprite.backgroundColor = 'rgba(102, 204, 255, 0.8)'; // Semi-transparent cyan background
+            sprite.padding = 4;
+            sprite.borderRadius = 3;
+            return sprite;
+          }
+        })
+        .linkColor(function(link) {
+          // Color links based on relationship type
+          switch(link.relationship) {
+            case 'contains': return '#66ccff';     // Cyan for containment
+            case 'instance_of': return '#44ff44';  // Green for instance relationships
+            case 'depends_on': return '#ff6666';   // Red for dependencies
+            case 'exposes': return '#ff66cc';      // Magenta for exposure
+            case 'routes': return '#ffcc66';       // Yellow for routing
+            case 'manages': return '#99ff66';      // Lime for management
+            case 'runs': return '#6699ff';         // Blue for running on
+            case 'accesses': return '#cc66ff';     // Purple for access
+            default: return '#66ccff';             // Default cyan
+          }
+        })
+        .linkWidth(2) // Thicker links for better visibility
+        .linkDirectionalParticles(15) // More particles
+        .linkDirectionalParticleWidth(3) // Brighter particles
+        .linkDirectionalParticleColor(() => '#ffffff') // White particles
+        .numDimensions(3)
+        .nodeResolution(15)
+        .linkDirectionalParticleSpeed(0.008) // Faster particles
+        .linkOpacity(function(link) {
+          // Opacity based on relationship type
+          switch(link.relationship) {
+            case 'contains': return 0.8;     // Standard opacity for containment
+            case 'instance_of': return 0.9;  // High opacity for instance relationships
+            case 'depends_on': return 0.7;   // Lower opacity for dependencies
+            case 'exposes': return 0.8;      // Standard opacity for exposure
+            case 'routes': return 0.9;       // High opacity for routing
+            case 'manages': return 0.8;      // Standard opacity for management
+            case 'runs': return 0.7;         // Lower opacity for running on
+            case 'accesses': return 0.9;     // High opacity for access
+            default: return 0.8;             // Default opacity
+          }
+        })
+        .onNodeHover(node => elem.style.cursor = node ? 'pointer' : null)
+        .onNodeClick(node => {
+          // Show detailed information in sidebar
+          showResourceDetails(node);
+          
+          // Center and zoom to the clicked resource
+          console.log(`Focusing on ${node.type}: ${node.name}`);
+          
+          // Move camera to center the node and zoom in closer
+          const camera = graph.camera();
+          const currentDistance = Math.hypot(
+            camera.position.x - node.x,
+            camera.position.y - node.y, 
+            camera.position.z - node.z
+          );
+          
+          // Calculate new camera position to center the node
+          const direction = {
+            x: camera.position.x - node.x,
+            y: camera.position.y - node.y,
+            z: camera.position.z - node.z
           };
-          const settings = new Settings();
-          const gui = new dat.GUI();
-          const controller = gui.add(settings, 'distance', 0, 500);
-          controller.onChange(updateLinkDistance);
-          function updateLinkDistance() {
-            linkForce.distance(link => settings.distance);
-            graph.numDimensions(3);
+          
+          // Normalize direction
+          const length = Math.hypot(direction.x, direction.y, direction.z);
+          if (length > 0) {
+            direction.x /= length;
+            direction.y /= length;
+            direction.z /= length;
           }
+          
+          // Zoom in closer when clicking - use a smaller distance
+          const zoomDistance = 150; // Closer zoom for detailed view
+          const targetDistance = Math.min(currentDistance, zoomDistance);
+          
+          const newCameraPos = {
+            x: node.x + direction.x * targetDistance,
+            y: node.y + direction.y * targetDistance,
+            z: node.z + direction.z * targetDistance
+          };
+          
+          graph.cameraPosition(
+            newCameraPos,
+            node, // lookAt the clicked node
+            1000  // ms transition duration - slightly faster for zoom
+          );
+        });
 
-          // WebSocket connection for live updates
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const wsUrl = `${protocol}//${window.location.host}/ws`;
-          const statusDiv = document.getElementById('connection-status');
-          let ws;
-          let reconnectInterval = 1000;
-          const maxReconnectInterval = 30000;
-          let currentData = { nodes: [], links: [] };
-          let isInitialized = false;
+        const linkForce = graph
+          .d3Force('link')
+          .distance(link => 150);
 
-          function updateStatus(status, color) {
-            statusDiv.textContent = status;
-            statusDiv.style.backgroundColor = color;
-            statusDiv.style.color = color === '#4CAF50' ? 'white' : 'black';
-          }
+        // Mobile-specific optimizations
+        function isMobileDevice() {
+          return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                 (window.innerWidth <= 768);
+        }
 
-          function nodeEquals(a, b) {
-            return a.id === b.id && 
-                   a.name === b.name && 
-                   a.type === b.type && 
-                   a.namespace === b.namespace && 
-                   a.status === b.status && 
-                   a.statusmessage === b.statusmessage;
-          }
-
-          function linkEquals(a, b) {
-            return a.source === b.source && 
-                   a.target === b.target && 
-                   a.value === b.value;
-          }
-
-          function updateGraphData(newData) {
-            if (!isInitialized) {
-              // First time - load all data
-              graph.graphData(newData);
-              currentData = JSON.parse(JSON.stringify(newData));
-              isInitialized = true;
-              return;
+        if (isMobileDevice()) {
+          // Optimize for mobile performance
+          graph
+            .nodeResolution(8) // Lower resolution for better performance
+            .linkDirectionalParticles(8) // Fewer particles
+            .linkDirectionalParticleWidth(2) // Smaller particles
+            .enableNodeDrag(false) // Disable node dragging on mobile for better touch interaction
+            .enableNavigationControls(false); // Disable navigation controls overlay
+            
+          // Prevent default touch behaviors that interfere with 3D interaction
+          const graphElement = document.getElementById('3d-graph');
+          graphElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) {
+              e.preventDefault(); // Prevent pinch zoom
             }
-
-            const currentNodes = currentData.nodes || [];
-            const currentLinks = currentData.links || [];
-            const newNodes = newData.nodes || [];
-            const newLinks = newData.links || [];
-
-            // Check for structural changes (additions/removals)
-            const nodeIdsChanged = currentNodes.length !== newNodes.length ||
-              !currentNodes.every(n => newNodes.some(nn => nn.id === n.id)) ||
-              !newNodes.every(n => currentNodes.some(nn => nn.id === n.id));
-
-            const linkIdsChanged = currentLinks.length !== newLinks.length ||
-              !currentLinks.every(l => newLinks.some(nl => nl.source === l.source && nl.target === l.target)) ||
-              !newLinks.every(l => currentLinks.some(nl => nl.source === l.source && nl.target === l.target));
-
-            // If structure changed, do full update
-            if (nodeIdsChanged || linkIdsChanged) {
-              console.log('Graph structure changed, doing full update');
-              graph.graphData(newData);
-              currentData = JSON.parse(JSON.stringify(newData));
-              return;
+          }, { passive: false });
+          
+          graphElement.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 1) {
+              e.preventDefault(); // Prevent pinch zoom during move
             }
+          }, { passive: false });
+        }
 
-            // Check for property changes only
-            let hasChanges = false;
-            const changedNodes = [];
+        // Resource type visibility management
+        let hiddenResourceTypes = new Set(['namespace']); // Hide namespaces by default
+        let hiddenRelationshipTypes = new Set(); // Track hidden relationship types
+        let originalData = { nodes: [], links: [] };
+        let currentFilteredData = { nodes: [], links: [] };
+        let isUpdatingFromToggle = false;
+        let toggleTimeout = null;
 
-            for (let i = 0; i < newNodes.length; i++) {
-              const currentNode = currentNodes.find(n => n.id === newNodes[i].id);
-              if (currentNode && !nodeEquals(currentNode, newNodes[i])) {
-                hasChanges = true;
-                changedNodes.push(newNodes[i]);
+        function updateResourceCounts(data) {
+          const counts = {};
+          data.nodes.forEach(node => {
+            counts[node.type] = (counts[node.type] || 0) + 1;
+          });
+          
+          Object.keys(counts).forEach(type => {
+            const countElement = document.getElementById(`count-${type}`);
+            if (countElement) {
+              countElement.textContent = counts[type];
+            }
+          });
+          
+          // Reset counts for types not present
+          document.querySelectorAll('.resource-count').forEach(el => {
+            const type = el.id.replace('count-', '');
+            if (!counts[type]) {
+              el.textContent = '0';
+            }
+          });
+        }
+
+        function updateRelationshipCounts(data) {
+          const relationshipCounts = {};
+          data.links.forEach(link => {
+            const rel = link.relationship || 'unknown';
+            relationshipCounts[rel] = (relationshipCounts[rel] || 0) + 1;
+          });
+          
+          Object.keys(relationshipCounts).forEach(rel => {
+            const countElement = document.getElementById(`count-${rel}`);
+            if (countElement) {
+              countElement.textContent = relationshipCounts[rel];
+            }
+          });
+          
+          // Reset counts for relationships not present
+          document.querySelectorAll('.relationship-count').forEach(el => {
+            const rel = el.id.replace('count-', '');
+            if (!relationshipCounts[rel]) {
+              el.textContent = '0';
+            }
+          });
+        }
+
+        function filterGraphData(data) {
+          // Filter nodes by resource type
+          const filteredNodes = data.nodes.filter(node => !hiddenResourceTypes.has(node.type));
+          const nodeIds = new Set(filteredNodes.map(node => node.id));
+          
+          // Filter links by node visibility and relationship type
+          const filteredLinks = data.links.filter(link => 
+            nodeIds.has(link.source) && 
+            nodeIds.has(link.target) &&
+            !hiddenRelationshipTypes.has(link.relationship)
+          );
+          
+          return {
+            nodes: filteredNodes,
+            links: filteredLinks
+          };
+        }
+
+        function applyFilterAndUpdate() {
+          const filteredData = filterGraphData(originalData);
+          currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+          graph.graphData(filteredData);
+        }
+
+        function toggleResourceType(type) {
+          const legendItem = document.querySelector(`[data-type="${type}"]`);
+          
+          isUpdatingFromToggle = true;
+          
+          if (hiddenResourceTypes.has(type)) {
+            hiddenResourceTypes.delete(type);
+            legendItem.classList.remove('disabled');
+          } else {
+            hiddenResourceTypes.add(type);
+            legendItem.classList.add('disabled');
+          }
+          
+          // Apply filter and update graph
+          applyFilterAndUpdate();
+          
+          // Clear any existing timeout and set a new one
+          if (toggleTimeout) {
+            clearTimeout(toggleTimeout);
+          }
+          
+          // Reset flag after a delay to allow for any pending WebSocket updates
+          toggleTimeout = setTimeout(() => {
+            isUpdatingFromToggle = false;
+            toggleTimeout = null;
+          }, 150);
+        }
+
+        function showAllResourceTypes() {
+          isUpdatingFromToggle = true;
+          hiddenResourceTypes.clear();
+          document.querySelectorAll('.legend-item').forEach(item => {
+            item.classList.remove('disabled');
+          });
+          applyFilterAndUpdate();
+          
+          if (toggleTimeout) {
+            clearTimeout(toggleTimeout);
+          }
+          toggleTimeout = setTimeout(() => {
+            isUpdatingFromToggle = false;
+            toggleTimeout = null;
+          }, 150);
+        }
+
+        function hideAllResourceTypes() {
+          isUpdatingFromToggle = true;
+          document.querySelectorAll('.legend-item[data-type]').forEach(item => {
+            const type = item.getAttribute('data-type');
+            hiddenResourceTypes.add(type);
+            item.classList.add('disabled');
+          });
+          currentFilteredData = { nodes: [], links: [] };
+          graph.graphData({ nodes: [], links: [] });
+          
+          if (toggleTimeout) {
+            clearTimeout(toggleTimeout);
+          }
+          toggleTimeout = setTimeout(() => {
+            isUpdatingFromToggle = false;
+            toggleTimeout = null;
+          }, 150);
+        }
+
+        // Add event listeners for legend interactions (with touch support)
+        document.querySelectorAll('.legend-item[data-type]').forEach(item => {
+          // Add both click and touch events for mobile compatibility
+          const handleToggle = () => {
+            const type = item.getAttribute('data-type');
+            toggleResourceType(type);
+          };
+          
+          item.addEventListener('click', handleToggle);
+          item.addEventListener('touchend', (e) => {
+            e.preventDefault(); // Prevent double-tap zoom
+            handleToggle();
+          });
+        });
+
+        // Add touch support for legend buttons
+        const showAllBtn = document.getElementById('show-all');
+        const hideAllBtn = document.getElementById('hide-all');
+        
+        showAllBtn.addEventListener('click', showAllResourceTypes);
+        showAllBtn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          showAllResourceTypes();
+        });
+        
+        hideAllBtn.addEventListener('click', hideAllResourceTypes);
+        hideAllBtn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          hideAllResourceTypes();
+        });
+
+        // Relationship toggle functionality
+        function toggleRelationshipType(relationship) {
+          const legendItem = document.querySelector(`[data-relationship="${relationship}"]`);
+          
+          isUpdatingFromToggle = true;
+          
+          if (hiddenRelationshipTypes.has(relationship)) {
+            hiddenRelationshipTypes.delete(relationship);
+            legendItem.classList.remove('disabled');
+          } else {
+            hiddenRelationshipTypes.add(relationship);
+            legendItem.classList.add('disabled');
+          }
+          
+          // Apply filter and update graph
+          applyFilterAndUpdate();
+          
+          // Clear any existing timeout and set a new one
+          if (toggleTimeout) {
+            clearTimeout(toggleTimeout);
+          }
+          
+          // Reset flag after a delay to allow for any pending WebSocket updates
+          toggleTimeout = setTimeout(() => {
+            isUpdatingFromToggle = false;
+            toggleTimeout = null;
+          }, 150);
+        }
+
+        // Add event listeners for relationship legend interactions (with touch support)
+        document.querySelectorAll('.legend-item[data-relationship]').forEach(item => {
+          const handleToggle = () => {
+            const relationship = item.getAttribute('data-relationship');
+            toggleRelationshipType(relationship);
+          };
+          
+          item.addEventListener('click', handleToggle);
+          item.addEventListener('touchend', (e) => {
+            e.preventDefault(); // Prevent double-tap zoom
+            handleToggle();
+          });
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (event) => {
+          // Only handle shortcuts when not typing in an input field
+          if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+            return;
+          }
+          
+          switch(event.key.toLowerCase()) {
+            case 'a':
+              if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                showAllResourceTypes();
               }
-            }
-
-            // Check for link property changes
-            for (let i = 0; i < newLinks.length; i++) {
-              const currentLink = currentLinks.find(l => 
-                l.source === newLinks[i].source && l.target === newLinks[i].target
-              );
-              if (currentLink && !linkEquals(currentLink, newLinks[i])) {
-                hasChanges = true;
-                break;
+              break;
+            case 'h':
+              if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                hideAllResourceTypes();
               }
-            }
+              break;
+            case 'p':
+              toggleResourceType('pod');
+              break;
+            case 's':
+              toggleResourceType('service');
+              break;
+            case 'd':
+              toggleResourceType('deployment');
+              break;
+            case 'n':
+              toggleResourceType('node');
+              break;
+            case 'i':
+              toggleResourceType('ingress');
+              break;
+            case 'c':
+              toggleResourceType('configmap');
+              break;
+            case 'o':
+              toggleResourceType('domain');
+              break;
+          }
+        });
 
-            if (hasChanges) {
-              console.log('Graph properties changed, updating...', { changedNodesCount: changedNodes.length });
+        // WebSocket connection for live updates
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        const statusDiv = document.getElementById('connection-status');
+        let ws;
+        let reconnectInterval = 1000;
+        const maxReconnectInterval = 30000;
+        let currentData = { nodes: [], links: [] };
+        let isInitialized = false;
+
+        function updateStatus(status, color) {
+          statusDiv.textContent = status;
+          statusDiv.style.backgroundColor = color;
+          statusDiv.style.color = color === '#4CAF50' ? 'white' : 'black';
+        }
+
+        function nodeEquals(a, b) {
+          return a.id === b.id && 
+                 a.name === b.name && 
+                 a.type === b.type && 
+                 a.namespace === b.namespace && 
+                 a.status === b.status && 
+                 a.statusmessage === b.statusmessage;
+        }
+
+        function linkEquals(a, b) {
+          return a.source === b.source && 
+                 a.target === b.target && 
+                 a.value === b.value;
+        }
+
+        function updateGraphData(newData) {
+          // Store original data for filtering
+          originalData = JSON.parse(JSON.stringify(newData));
+          
+          // Update resource and relationship counts (this is always safe to do)
+          updateResourceCounts(newData);
+          updateRelationshipCounts(newData);
+          
+          // If we're currently updating from a toggle action, skip the graph update
+          // to prevent the flash. The toggle function has already updated the graph.
+          if (isUpdatingFromToggle) {
+            console.log('Skipping graph update - toggle in progress');
+            return;
+          }
+          
+          const filteredData = filterGraphData(newData);
+          
+          if (!isInitialized) {
+            // First time - load filtered data
+            graph.graphData(filteredData);
+            currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+            isInitialized = true;
+            return;
+          }
+
+          const currentNodes = currentFilteredData.nodes || [];
+          const currentLinks = currentFilteredData.links || [];
+          const newNodes = filteredData.nodes || [];
+          const newLinks = filteredData.links || [];
+
+          // Check for structural changes (additions/removals)
+          const nodeIdsChanged = currentNodes.length !== newNodes.length ||
+            !currentNodes.every(n => newNodes.some(nn => nn.id === n.id)) ||
+            !newNodes.every(n => currentNodes.some(nn => nn.id === n.id));
+
+          const linkIdsChanged = currentLinks.length !== newLinks.length ||
+            !currentLinks.every(l => newLinks.some(nl => nl.source === l.source && nl.target === l.target)) ||
+            !newLinks.every(l => currentLinks.some(nl => nl.source === l.source && nl.target === l.target));
+
+          // If structure changed, do full update
+          if (nodeIdsChanged || linkIdsChanged) {
+            console.log('Graph structure changed, doing full update');
+            graph.graphData(filteredData);
+            currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+            return;
+          }
+
+          // Check for property changes only
+          let hasChanges = false;
+          const changedNodes = [];
+
+          for (let i = 0; i < newNodes.length; i++) {
+            const currentNode = currentNodes.find(n => n.id === newNodes[i].id);
+            if (currentNode && !nodeEquals(currentNode, newNodes[i])) {
+              hasChanges = true;
+              changedNodes.push(newNodes[i]);
+            }
+          }
+
+          // Check for link property changes
+          for (let i = 0; i < newLinks.length; i++) {
+            const currentLink = currentLinks.find(l => 
+              l.source === newLinks[i].source && l.target === newLinks[i].target
+            );
+            if (currentLink && !linkEquals(currentLink, newLinks[i])) {
+              hasChanges = true;
+              break;
+            }
+          }
+
+          if (hasChanges) {
+            console.log('Graph properties changed, updating...', { changedNodesCount: changedNodes.length });
+            
+            // Update the graph data with filtered data - the library will handle minimal re-rendering
+            graph.graphData(filteredData);
+            currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+          } else {
+            console.log('No changes detected, skipping update');
+          }
+        }
+
+        function connectWebSocket() {
+          updateStatus('Connecting...', '#FFC107');
+          ws = new WebSocket(wsUrl);
+          
+          ws.onopen = function() {
+            console.log('WebSocket connected');
+            updateStatus('Connected (Live)', '#4CAF50');
+            reconnectInterval = 1000; // Reset reconnect interval on successful connection
+          };
+          
+          ws.onmessage = function(event) {
+            try {
+              const data = JSON.parse(event.data);
+              const timestamp = new Date().toLocaleTimeString();
+              console.log(`[${timestamp}] Received data:`, data.nodes?.length, 'nodes,', data.links?.length, 'links');
+              updateGraphData(data);
+              updateStatus(`Connected (Live) - ${timestamp}`, '#4CAF50');
+            } catch (error) {
+              console.error('Error parsing WebSocket data:', error);
+              updateStatus('Data Error', '#F44336');
+            }
+          };
+          
+          ws.onclose = function() {
+            console.log('WebSocket disconnected, attempting to reconnect...');
+            updateStatus('Reconnecting...', '#FF9800');
+            setTimeout(connectWebSocket, reconnectInterval);
+            reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
+          };
+          
+          ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+            updateStatus('Connection Error', '#F44336');
+          };
+        }
+
+        // Sidebar functionality
+        function showResourceDetails(node) {
+          const sidebar = document.getElementById('sidebar');
+          const resourceName = document.getElementById('sidebar-resource-name');
+          const resourceType = document.getElementById('sidebar-resource-type');
+          const sidebarContent = document.getElementById('sidebar-content');
+          
+          // Update header
+          resourceName.textContent = node.name;
+          resourceType.textContent = `${node.type.charAt(0).toUpperCase() + node.type.slice(1)} Resource`;
+          
+          // Build detailed content
+          let content = '';
+          
+          // Basic Information Section
+          content += '<div class="sidebar-section">';
+          content += '<div class="sidebar-section-title">Basic Information</div>';
+          content += `<div class="sidebar-item"><span class="sidebar-label">Name:</span><span class="sidebar-value">${node.name}</span></div>`;
+          content += `<div class="sidebar-item"><span class="sidebar-label">Type:</span><span class="sidebar-value">${node.type}</span></div>`;
+          if (node.namespace) {
+            content += `<div class="sidebar-item"><span class="sidebar-label">Namespace:</span><span class="sidebar-value">${node.namespace}</span></div>`;
+          }
+          if (node.age) {
+            content += `<div class="sidebar-item"><span class="sidebar-label">Age:</span><span class="sidebar-value">${node.age}</span></div>`;
+          }
+          if (node.creationtime) {
+            const date = new Date(node.creationtime);
+            content += `<div class="sidebar-item"><span class="sidebar-label">Created:</span><span class="sidebar-value">${date.toLocaleString()}</span></div>`;
+          }
+          content += '</div>';
+          
+          // Status Section
+          if (node.status || node.statusmessage) {
+            content += '<div class="sidebar-section">';
+            content += '<div class="sidebar-section-title">Status</div>';
+            if (node.status) {
+              const statusClass = node.status === 'Running' || node.status.includes('Ready') ? 'status-running' : 
+                                 node.status === 'Failed' || node.status.includes('Error') ? 'status-failed' : 
+                                 node.status.includes('Pending') ? 'status-pending' : 'status-default';
+              content += `<div class="sidebar-item"><span class="sidebar-label">Status:</span><span class="sidebar-status ${statusClass}">${node.status}</span></div>`;
+            }
+            if (node.statusmessage) {
+              content += `<div class="sidebar-item"><span class="sidebar-label">Message:</span><span class="sidebar-value">${node.statusmessage}</span></div>`;
+            }
+            content += '</div>';
+          }
+          
+          // Resource-specific Information
+          if (node.resourceinfo && Object.keys(node.resourceinfo).length > 0) {
+            content += '<div class="sidebar-section">';
+            content += '<div class="sidebar-section-title">Resource Details</div>';
+            
+            Object.entries(node.resourceinfo).forEach(([key, value]) => {
+              if (key === 'key_names' && Array.isArray(value)) {
+                content += `<div class="sidebar-item"><span class="sidebar-label">${formatLabel(key)}:</span><div class="sidebar-labels">`;
+                value.forEach(keyName => {
+                  content += `<span class="sidebar-label-item">${keyName}</span>`;
+                });
+                content += '</div></div>';
+              } else if (key === 'conditions' && Array.isArray(value)) {
+                content += `<div class="sidebar-item"><span class="sidebar-label">${formatLabel(key)}:</span><div class="sidebar-labels">`;
+                value.forEach(condition => {
+                  content += `<span class="sidebar-label-item">${condition}</span>`;
+                });
+                content += '</div></div>';
+              } else if (key === 'port_details' && Array.isArray(value)) {
+                content += `<div class="sidebar-item"><span class="sidebar-label">Ports:</span></div>`;
+                value.forEach(port => {
+                  content += `<div class="sidebar-item" style="margin-left: 20px;">`;
+                  content += `<span class="sidebar-value">${port.name || 'unnamed'}: ${port.port}`;
+                  if (port.target_port) content += ` → ${port.target_port}`;
+                  if (port.protocol) content += ` (${port.protocol})`;
+                  if (port.node_port) content += ` [NodePort: ${port.node_port}]`;
+                  content += `</span></div>`;
+                });
+              } else if (typeof value === 'object' && value !== null) {
+                content += `<div class="sidebar-item"><span class="sidebar-label">${formatLabel(key)}:</span><span class="sidebar-value">${JSON.stringify(value)}</span></div>`;
+              } else {
+                content += `<div class="sidebar-item"><span class="sidebar-label">${formatLabel(key)}:</span><span class="sidebar-value">${value}</span></div>`;
+              }
+            });
+            content += '</div>';
+          }
+          
+          // Labels Section
+          if (node.labels && Object.keys(node.labels).length > 0) {
+            content += '<div class="sidebar-section">';
+            content += '<div class="sidebar-section-title">Labels</div>';
+            content += '<div class="sidebar-labels">';
+            Object.entries(node.labels).forEach(([key, value]) => {
+              content += `<span class="sidebar-label-item">${key}: ${value}</span>`;
+            });
+            content += '</div>';
+            content += '</div>';
+          }
+          
+          // Annotations Section (show first few)
+          if (node.annotations && Object.keys(node.annotations).length > 0) {
+            content += '<div class="sidebar-section">';
+            content += '<div class="sidebar-section-title">Annotations</div>';
+            const annotationEntries = Object.entries(node.annotations).slice(0, 5);
+            annotationEntries.forEach(([key, value]) => {
+              const truncatedValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
+              content += `<div class="sidebar-item"><span class="sidebar-label">${key}:</span><span class="sidebar-value">${truncatedValue}</span></div>`;
+            });
+            if (Object.keys(node.annotations).length > 5) {
+              content += `<div class="sidebar-item"><span class="sidebar-value" style="color: #666;">... and ${Object.keys(node.annotations).length - 5} more annotations</span></div>`;
+            }
+            content += '</div>';
+          }
+          
+          sidebarContent.innerHTML = content;
+          sidebar.classList.add('open');
+        }
+        
+        function closeSidebar() {
+          const sidebar = document.getElementById('sidebar');
+          sidebar.classList.remove('open');
+          
+          // Zoom out while maintaining current viewing angle
+          const camera = graph.camera();
+          const currentPos = camera.position;
+          
+          // Calculate center of all nodes to determine what we're looking at
+          const graphData = graph.graphData();
+          if (graphData.nodes && graphData.nodes.length > 0) {
+            let centerX = 0, centerY = 0, centerZ = 0;
+            let nodeCount = 0;
+            
+            graphData.nodes.forEach(node => {
+              if (node.x !== undefined && node.y !== undefined && node.z !== undefined) {
+                centerX += node.x;
+                centerY += node.y;
+                centerZ += node.z;
+                nodeCount++;
+              }
+            });
+            
+            if (nodeCount > 0) {
+              centerX /= nodeCount;
+              centerY /= nodeCount;
+              centerZ /= nodeCount;
               
-              // Update the graph data - the library will handle minimal re-rendering
-              graph.graphData(newData);
-              currentData = JSON.parse(JSON.stringify(newData));
-            } else {
-              console.log('No changes detected, skipping update');
+              // Calculate current direction from center to camera
+              const direction = {
+                x: currentPos.x - centerX,
+                y: currentPos.y - centerY,
+                z: currentPos.z - centerZ
+              };
+              
+              // Normalize direction to maintain viewing angle
+              const currentDistance = Math.hypot(direction.x, direction.y, direction.z);
+              if (currentDistance > 0) {
+                direction.x /= currentDistance;
+                direction.y /= currentDistance;
+                direction.z /= currentDistance;
+              }
+              
+              // Zoom out to a comfortable overview distance while keeping the same angle
+              const zoomOutDistance = Math.max(currentDistance * 1.8, 1000); // Zoom out by 80% or minimum 250 units
+              
+              const newCameraPos = {
+                x: centerX + direction.x * zoomOutDistance,
+                y: centerY + direction.y * zoomOutDistance,
+                z: centerZ + direction.z * zoomOutDistance
+              };
+              
+              graph.cameraPosition(
+                newCameraPos,
+                { x: centerX, y: centerY, z: centerZ }, // Still look at center
+                1200 // ms transition duration - slightly faster
+              );
             }
           }
-
-          function connectWebSocket() {
-            updateStatus('Connecting...', '#FFC107');
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = function() {
-              console.log('WebSocket connected');
-              updateStatus('Connected (Live)', '#4CAF50');
-              reconnectInterval = 1000; // Reset reconnect interval on successful connection
-            };
-            
-            ws.onmessage = function(event) {
-              try {
-                const data = JSON.parse(event.data);
-                const timestamp = new Date().toLocaleTimeString();
-                console.log(`[${timestamp}] Received data:`, data.nodes?.length, 'nodes,', data.links?.length, 'links');
-                updateGraphData(data);
-                updateStatus(`Connected (Live) - ${timestamp}`, '#4CAF50');
-              } catch (error) {
-                console.error('Error parsing WebSocket data:', error);
-                updateStatus('Data Error', '#F44336');
-              }
-            };
-            
-            ws.onclose = function() {
-              console.log('WebSocket disconnected, attempting to reconnect...');
-              updateStatus('Reconnecting...', '#FF9800');
-              setTimeout(connectWebSocket, reconnectInterval);
-              reconnectInterval = Math.min(reconnectInterval * 2, maxReconnectInterval);
-            };
-            
-            ws.onerror = function(error) {
-              console.error('WebSocket error:', error);
-              updateStatus('Connection Error', '#F44336');
-            };
+        }
+        
+        function formatLabel(key) {
+          return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        // Close sidebar when clicking/touching outside
+        function handleOutsideInteraction(event) {
+          const sidebar = document.getElementById('sidebar');
+          const isInsideSidebar = sidebar.contains(event.target);
+          const isOnResource = event.target.closest('#3d-graph');
+          
+          if (!isInsideSidebar && !isOnResource && sidebar.classList.contains('open')) {
+            closeSidebar();
           }
+        }
+        
+        document.addEventListener('click', handleOutsideInteraction);
+        document.addEventListener('touchend', handleOutsideInteraction);
 
-          // Add better lighting for visibility
-          const scene = graph.scene();
-          
-          // Add ambient light for overall brightness
-          const ambientLight = new THREE.AmbientLight(0x404040, 0.6); // Soft white light
-          scene.add(ambientLight);
-          
-          // Add directional light for better 3D definition
-          const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-          directionalLight.position.set(100, 100, 100);
-          scene.add(directionalLight);
-          
-          // Add another directional light from opposite side
-          const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-          directionalLight2.position.set(-100, -100, -100);
-          scene.add(directionalLight2);
+        // Mobile legend toggle functionality
+        const legendToggle = document.getElementById('legend-toggle');
+        const legend = document.getElementById('legend');
+        let legendOpen = false;
+        
+        function toggleMobileLegend() {
+          legendOpen = !legendOpen;
+          if (legendOpen) {
+            legend.classList.add('mobile-open');
+            legendToggle.textContent = '✕ Close';
+          } else {
+            legend.classList.remove('mobile-open');
+            legendToggle.textContent = '☰ Controls';
+          }
+        }
+        
+        legendToggle.addEventListener('click', toggleMobileLegend);
+        legendToggle.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          toggleMobileLegend();
+        });
+        
+        // Close mobile legend when clicking outside
+        document.addEventListener('click', (e) => {
+          if (window.innerWidth <= 768 && legendOpen && 
+              !legend.contains(e.target) && 
+              !legendToggle.contains(e.target)) {
+            toggleMobileLegend();
+          }
+        });
+        
+        // Add touch support for sidebar close button
+        const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+        sidebarCloseBtn.addEventListener('click', closeSidebar);
+        sidebarCloseBtn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          closeSidebar();
+        });
 
-          // Start WebSocket connection
-          connectWebSocket();
-    </script>
-  </body>
+        // Start WebSocket connection
+        connectWebSocket();
 
+        // Handle window resize to update graph renderer size and mobile state
+        let resizeTimeout;
+        function handleResize() {
+          // Clear existing timeout to debounce resize events
+          if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+          }
+          
+          // Debounce resize to avoid too many calls during window dragging
+          resizeTimeout = setTimeout(() => {
+            // Force the graph to recalculate its size
+            graph.width(window.innerWidth).height(window.innerHeight);
+            console.log(`Graph resized to: ${window.innerWidth}x${window.innerHeight}`);
+            
+            // Handle mobile/desktop transition
+            if (window.innerWidth > 768 && legendOpen) {
+              // Switching to desktop - close mobile legend
+              legend.classList.remove('mobile-open');
+              legendOpen = false;
+              legendToggle.textContent = '☰ Controls';
+            }
+            
+            resizeTimeout = null;
+          }, 100); // 100ms debounce delay
+        }
+
+        // Add resize event listener
+        window.addEventListener('resize', handleResize);
+
+        // Set initial size
+        graph.width(window.innerWidth).height(window.innerHeight);
+  </script>
+</body>

@@ -14,8 +14,18 @@ A __Live Demo Version__ is available [here](https://afritzler.github.io/kube-uni
 
 ## Features
 
-* 3D cluster overview
-* Identify pods with errors
+* 3D cluster overview with comprehensive Kubernetes resource visualization
+* Real-time updates via WebSocket connection
+* Identify pods with errors and status information
+* Visual representation of resource relationships and dependencies
+
+## Supported Resource Types
+
+* **Core Resources**: Namespaces, Pods, Nodes, Services, ConfigMaps, Secrets, ServiceAccounts
+* **Workload Resources**: Deployments, ReplicaSets, DaemonSets, StatefulSets
+* **Network Resources**: Ingresses, EndpointSlices
+* **Visual Indicators**: Different shapes and colors for each resource type
+* **Status Information**: Pod status, deployment replica counts, and more
 
 ## Installation and Usage
 
