@@ -394,6 +394,66 @@
       visibility: hidden;
     }
     
+    /* Rendering dialog styles */
+    #rendering-dialog {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.95);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 12px;
+      font-family: Arial, sans-serif;
+      z-index: 1500;
+      border: 1px solid #444;
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    }
+    
+    #rendering-dialog.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .rendering-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(102, 204, 255, 0.3);
+      border-top: 2px solid #66ccff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    .rendering-text {
+      color: #66ccff;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    
+    /* Mobile responsive rendering dialog */
+    @media (max-width: 768px) {
+      #rendering-dialog {
+        padding: 15px 20px;
+        border-radius: 8px;
+      }
+      
+      .rendering-spinner {
+        width: 20px;
+        height: 20px;
+      }
+      
+      .rendering-text {
+        font-size: 14px;
+      }
+    }
+    
     .loading-spinner {
       width: 60px;
       height: 60px;
@@ -455,6 +515,12 @@
     <div class="loading-spinner"></div>
     <div class="loading-text">Loading Kubernetes Universe</div>
     <div class="loading-subtext">Connecting to cluster and building 3D visualization...</div>
+  </div>
+
+  <!-- Rendering dialog -->
+  <div id="rendering-dialog">
+    <div class="rendering-spinner"></div>
+    <div class="rendering-text">Rendering...</div>
   </div>
 
   <!-- Sidebar for detailed resource information -->
@@ -1228,26 +1294,38 @@
             return;
           }
           
-          const filteredData = filterGraphData(originalData);
+          // Show rendering dialog when filtering starts
+          showRenderingDialog();
           
-          if (!isInitialized) {
-            // First time initialization
+          // Use setTimeout to allow the dialog to render before starting the heavy filtering work
+          setTimeout(() => {
+            const filteredData = filterGraphData(originalData);
+            
+            if (!isInitialized) {
+              // First time initialization
+              graph.graphData(filteredData);
+              currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+              hideRenderingDialog();
+              return;
+            }
+            
+            // For filter changes, do direct graph update (not incremental)
+            // This ensures proper filtering without incremental update conflicts
             graph.graphData(filteredData);
             currentFilteredData = JSON.parse(JSON.stringify(filteredData));
-            return;
-          }
-          
-          // For filter changes, do direct graph update (not incremental)
-          // This ensures proper filtering without incremental update conflicts
-          graph.graphData(filteredData);
-          currentFilteredData = JSON.parse(JSON.stringify(filteredData));
-          
-          console.log('Filter applied:', {
-            visibleNodes: filteredData.nodes.length,
-            visibleLinks: filteredData.links.length,
-            hiddenTypes: Array.from(hiddenResourceTypes),
-            hiddenRelationships: Array.from(hiddenRelationshipTypes)
-          });
+            
+            console.log('Filter applied:', {
+              visibleNodes: filteredData.nodes.length,
+              visibleLinks: filteredData.links.length,
+              hiddenTypes: Array.from(hiddenResourceTypes),
+              hiddenRelationships: Array.from(hiddenRelationshipTypes)
+            });
+            
+            // Hide rendering dialog after a short delay to ensure graph has updated
+            setTimeout(() => {
+              hideRenderingDialog();
+            }, 100);
+          }, 100);
         }
 
         function toggleResourceType(type) {
@@ -1280,40 +1358,53 @@
 
         function showAllResourceTypes() {
           isUpdatingFromToggle = true;
-          hiddenResourceTypes.clear();
-          document.querySelectorAll('.legend-item').forEach(item => {
-            item.classList.remove('disabled');
-          });
-          applyFilterAndUpdate();
+          showRenderingDialog();
           
-          if (toggleTimeout) {
-            clearTimeout(toggleTimeout);
-          }
-          toggleTimeout = setTimeout(() => {
-            isUpdatingFromToggle = false;
-            toggleTimeout = null;
-          }, 150);
+          setTimeout(() => {
+            hiddenResourceTypes.clear();
+            document.querySelectorAll('.legend-item').forEach(item => {
+              item.classList.remove('disabled');
+            });
+            applyFilterAndUpdate();
+            
+            if (toggleTimeout) {
+              clearTimeout(toggleTimeout);
+            }
+            toggleTimeout = setTimeout(() => {
+              isUpdatingFromToggle = false;
+              toggleTimeout = null;
+            }, 150);
+          }, 100);
         }
 
         function hideAllResourceTypes() {
           isUpdatingFromToggle = true;
-          document.querySelectorAll('.legend-item[data-type]').forEach(item => {
-            const type = item.getAttribute('data-type');
-            hiddenResourceTypes.add(type);
-            item.classList.add('disabled');
-          });
+          showRenderingDialog();
           
-          // For hide all, we can directly set empty data since it's a complete clear
-          currentFilteredData = { nodes: [], links: [] };
-          graph.graphData({ nodes: [], links: [] });
-          
-          if (toggleTimeout) {
-            clearTimeout(toggleTimeout);
-          }
-          toggleTimeout = setTimeout(() => {
-            isUpdatingFromToggle = false;
-            toggleTimeout = null;
-          }, 150);
+          setTimeout(() => {
+            document.querySelectorAll('.legend-item[data-type]').forEach(item => {
+              const type = item.getAttribute('data-type');
+              hiddenResourceTypes.add(type);
+              item.classList.add('disabled');
+            });
+            
+            // For hide all, we can directly set empty data since it's a complete clear
+            currentFilteredData = { nodes: [], links: [] };
+            graph.graphData({ nodes: [], links: [] });
+            
+            // Hide rendering dialog after clearing
+            setTimeout(() => {
+              hideRenderingDialog();
+            }, 100);
+            
+            if (toggleTimeout) {
+              clearTimeout(toggleTimeout);
+            }
+            toggleTimeout = setTimeout(() => {
+              isUpdatingFromToggle = false;
+              toggleTimeout = null;
+            }, 150);
+          }, 100);
         }
 
         // Add event listeners for legend interactions (with touch support)
@@ -1505,6 +1596,20 @@
           if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
             loadingOverlay.classList.add('hidden');
             console.log('Loading overlay hidden - graph data received');
+          }
+        }
+
+        function showRenderingDialog() {
+          const renderingDialog = document.getElementById('rendering-dialog');
+          if (renderingDialog) {
+            renderingDialog.classList.add('visible');
+          }
+        }
+
+        function hideRenderingDialog() {
+          const renderingDialog = document.getElementById('rendering-dialog');
+          if (renderingDialog) {
+            renderingDialog.classList.remove('visible');
           }
         }
 
