@@ -42,7 +42,7 @@ https://github.com/user-attachments/assets/b765eab7-0850-4d29-8b5b-2a2e39a8a681
 Try `kube-universe` with Kubernetes Manifest file
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/afritzler/kube-universe/master/docs/deploy_full.yaml
+kubectl apply -f https://raw.githubusercontent.com/pmh-only/kube-universe/master/docs/deploy_full.yaml
 kubectl port-forward -n kube-universe svc/kube-universe-service 3000:3000
 ```
 
