@@ -29,21 +29,23 @@ import (
 )
 
 const (
-	clusterType        = "cluster"
-	domainType         = "domain"
-	namespaceType      = "namespace"
-	podType            = "pod"
-	nodeType           = "node"
-	serviceType        = "service"
-	ingressType        = "ingress"
-	endpointSliceType  = "endpointslice"
-	serviceAccountType = "serviceaccount"
-	deploymentType     = "deployment"
-	replicaSetType     = "replicaset"
-	daemonSetType      = "daemonset"
-	statefulSetType    = "statefulset"
-	configMapType      = "configmap"
-	secretType         = "secret"
+	clusterType               = "cluster"
+	domainType                = "domain"
+	namespaceType             = "namespace"
+	podType                   = "pod"
+	nodeType                  = "node"
+	serviceType               = "service"
+	ingressType               = "ingress"
+	endpointSliceType         = "endpointslice"
+	serviceAccountType        = "serviceaccount"
+	deploymentType            = "deployment"
+	replicaSetType            = "replicaset"
+	daemonSetType             = "daemonset"
+	statefulSetType           = "statefulset"
+	configMapType             = "configmap"
+	secretType                = "secret"
+	persistentVolumeType      = "persistentvolume"
+	persistentVolumeClaimType = "persistentvolumeclaim"
 )
 
 // Relationship types for links
@@ -56,6 +58,7 @@ const (
 	relationshipManages    = "manages"     // A manages B (deployment manages replicaset)
 	relationshipRuns       = "runs"        // A runs on B (pod runs on node)
 	relationshipAccesses   = "accesses"    // A accesses B (domain accesses ingress)
+	relationshipClaims     = "claims"      // A claims B (PVC claims PV)
 )
 
 // getKubernetesConfig returns a Kubernetes config, prioritizing in-cluster config
@@ -728,6 +731,144 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 		links = append(links, kutype.Link{Source: namespaceKey, Target: secretKey, Value: 0, Relationship: relationshipContains})
 	}
 
+	// Get persistent volumes
+	persistentVolumes, err := clientset.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get persistent volumes: %s", err)
+	}
+	for _, pv := range persistentVolumes.Items {
+		pvKey := fmt.Sprintf("%s-%s", persistentVolumeType, pv.Name)
+
+		resourceInfo := make(map[string]interface{})
+
+		// Capacity
+		if capacity := pv.Spec.Capacity["storage"]; capacity.String() != "" {
+			resourceInfo["capacity"] = capacity.String()
+		}
+
+		// Access modes
+		accessModes := make([]string, 0)
+		for _, mode := range pv.Spec.AccessModes {
+			accessModes = append(accessModes, string(mode))
+		}
+		resourceInfo["access_modes"] = accessModes
+
+		// Reclaim policy
+		if pv.Spec.PersistentVolumeReclaimPolicy != "" {
+			resourceInfo["reclaim_policy"] = string(pv.Spec.PersistentVolumeReclaimPolicy)
+		}
+
+		// Storage class
+		resourceInfo["storage_class"] = pv.Spec.StorageClassName
+
+		// Volume mode
+		if pv.Spec.VolumeMode != nil {
+			resourceInfo["volume_mode"] = string(*pv.Spec.VolumeMode)
+		}
+
+		// Claim reference
+		if pv.Spec.ClaimRef != nil {
+			resourceInfo["claim_ref"] = fmt.Sprintf("%s/%s", pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
+		}
+
+		// Volume source type
+		if pv.Spec.HostPath != nil {
+			resourceInfo["volume_source"] = "HostPath"
+		} else if pv.Spec.NFS != nil {
+			resourceInfo["volume_source"] = "NFS"
+		} else if pv.Spec.AWSElasticBlockStore != nil {
+			resourceInfo["volume_source"] = "AWS EBS"
+		} else if pv.Spec.GCEPersistentDisk != nil {
+			resourceInfo["volume_source"] = "GCE PD"
+		} else if pv.Spec.CSI != nil {
+			resourceInfo["volume_source"] = fmt.Sprintf("CSI (%s)", pv.Spec.CSI.Driver)
+		} else {
+			resourceInfo["volume_source"] = "Other"
+		}
+
+		nodes[pvKey] = &kutype.Node{
+			Id:           pvKey,
+			Name:         pv.Name,
+			Type:         persistentVolumeType,
+			Namespace:    "", // PVs are cluster-scoped
+			Status:       string(pv.Status.Phase),
+			CreationTime: pv.CreationTimestamp.Format(time.RFC3339),
+			Age:          calculateAge(pv.CreationTimestamp),
+			Labels:       pv.Labels,
+			Annotations:  pv.Annotations,
+			ResourceInfo: resourceInfo,
+		}
+	}
+
+	// Get persistent volume claims
+	persistentVolumeClaims, err := clientset.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get persistent volume claims: %s", err)
+	}
+	for _, pvc := range persistentVolumeClaims.Items {
+		pvcKey := fmt.Sprintf("%s-%s-%s", persistentVolumeClaimType, pvc.Namespace, pvc.Name)
+		namespaceKey := fmt.Sprintf("%s-%s", namespaceType, pvc.Namespace)
+
+		resourceInfo := make(map[string]interface{})
+
+		// Requested storage
+		if requests := pvc.Spec.Resources.Requests["storage"]; requests.String() != "" {
+			resourceInfo["requested_storage"] = requests.String()
+		}
+
+		// Access modes
+		accessModes := make([]string, 0)
+		for _, mode := range pvc.Spec.AccessModes {
+			accessModes = append(accessModes, string(mode))
+		}
+		resourceInfo["access_modes"] = accessModes
+
+		// Storage class
+		if pvc.Spec.StorageClassName != nil {
+			resourceInfo["storage_class"] = *pvc.Spec.StorageClassName
+		}
+
+		// Volume mode
+		if pvc.Spec.VolumeMode != nil {
+			resourceInfo["volume_mode"] = string(*pvc.Spec.VolumeMode)
+		}
+
+		// Volume name (bound PV)
+		resourceInfo["volume_name"] = pvc.Spec.VolumeName
+
+		// Phase
+		resourceInfo["phase"] = string(pvc.Status.Phase)
+
+		// Actual capacity (if bound)
+		if capacity := pvc.Status.Capacity["storage"]; capacity.String() != "" {
+			resourceInfo["actual_capacity"] = capacity.String()
+		}
+
+		nodes[pvcKey] = &kutype.Node{
+			Id:           pvcKey,
+			Name:         pvc.Name,
+			Type:         persistentVolumeClaimType,
+			Namespace:    pvc.Namespace,
+			Status:       string(pvc.Status.Phase),
+			CreationTime: pvc.CreationTimestamp.Format(time.RFC3339),
+			Age:          calculateAge(pvc.CreationTimestamp),
+			Labels:       pvc.Labels,
+			Annotations:  pvc.Annotations,
+			ResourceInfo: resourceInfo,
+		}
+
+		// Link PVC to namespace
+		links = append(links, kutype.Link{Source: namespaceKey, Target: pvcKey, Value: 0, Relationship: relationshipContains})
+
+		// Link PVC to PV if bound
+		if pvc.Spec.VolumeName != "" {
+			pvKey := fmt.Sprintf("%s-%s", persistentVolumeType, pvc.Spec.VolumeName)
+			if _, exists := nodes[pvKey]; exists {
+				links = append(links, kutype.Link{Source: pvcKey, Target: pvKey, Value: 0, Relationship: relationshipClaims})
+			}
+		}
+	}
+
 	// Link pods to their controllers (deployments, daemonsets, statefulsets via replicasets)
 	for _, p := range pods.Items {
 		podKey := fmt.Sprintf("%s-%s-%s", podType, p.Namespace, p.Name)
@@ -756,7 +897,7 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 			}
 		}
 
-		// Link pods to config maps and secrets
+		// Link pods to config maps, secrets, and persistent volume claims
 		for _, volume := range p.Spec.Volumes {
 			if volume.ConfigMap != nil {
 				cmKey := fmt.Sprintf("%s-%s-%s", configMapType, p.Namespace, volume.ConfigMap.Name)
@@ -768,6 +909,12 @@ func GetGraph(kubeconfig string) ([]byte, error) {
 				secretKey := fmt.Sprintf("%s-%s-%s", secretType, p.Namespace, volume.Secret.SecretName)
 				if _, exists := nodes[secretKey]; exists {
 					links = append(links, kutype.Link{Source: secretKey, Target: podKey, Value: 0, Relationship: relationshipDependsOn})
+				}
+			}
+			if volume.PersistentVolumeClaim != nil {
+				pvcKey := fmt.Sprintf("%s-%s-%s", persistentVolumeClaimType, p.Namespace, volume.PersistentVolumeClaim.ClaimName)
+				if _, exists := nodes[pvcKey]; exists {
+					links = append(links, kutype.Link{Source: pvcKey, Target: podKey, Value: 0, Relationship: relationshipDependsOn})
 				}
 			}
 		}

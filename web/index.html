@@ -221,6 +221,31 @@
       overflow-y: auto;
     }
     
+    /* Custom scrollbar for legend */
+    #legend::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    #legend::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    
+    #legend::-webkit-scrollbar-thumb {
+      background: rgba(102, 204, 255, 0.6);
+      border-radius: 3px;
+    }
+    
+    #legend::-webkit-scrollbar-thumb:hover {
+      background: rgba(102, 204, 255, 0.8);
+    }
+    
+    /* Firefox scrollbar styling */
+    #legend {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(102, 204, 255, 0.6) rgba(255, 255, 255, 0.1);
+    }
+    
     /* Mobile legend toggle button */
     #legend-toggle {
       display: none;
@@ -246,6 +271,7 @@
     @media (max-width: 768px) {
       #legend-toggle {
         display: block;
+        z-index: 999; /* Lower than sidebar close button */
       }
       
       #legend {
@@ -261,6 +287,7 @@
         opacity: 0;
         visibility: hidden;
         transition: all 0.3s ease;
+        z-index: 999; /* Lower than sidebar close button */
       }
       
       #legend.mobile-open {
@@ -269,10 +296,22 @@
         visibility: visible;
       }
       
+      /* Hide legend toggle when sidebar is open */
+      #sidebar.open ~ #legend-toggle {
+        display: none;
+      }
+      
+      #sidebar.open ~ #legend {
+        display: none;
+      }
+    }
+      
       .legend-item {
         padding: 4px 6px;
         margin-bottom: 6px;
         font-size: 11px;
+        display: flex;
+        align-items: center;
       }
       
       .legend-controls {
@@ -289,7 +328,6 @@
         font-size: 8px;
         line-height: 1.2;
       }
-    }
     
     .legend-item {
       display: flex;
@@ -354,6 +392,35 @@
     .legend-button:hover {
       background: rgba(102, 204, 255, 0.3);
       color: white;
+    }
+    
+    .preset-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .preset-button {
+      background: rgba(153, 255, 102, 0.2);
+      border: 1px solid #99ff66;
+      color: #99ff66;
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    
+    .preset-button:hover {
+      background: rgba(153, 255, 102, 0.3);
+      color: white;
+    }
+    
+    .preset-button.active {
+      background: rgba(153, 255, 102, 0.4);
+      color: white;
+      border-color: white;
     }
     
     .resource-count {
@@ -614,9 +681,30 @@
       <span>EndpointSlice</span>
       <span class="resource-count" id="count-endpointslice">0</span>
     </div>
+    <div class="legend-item" data-type="persistentvolume">
+      <div class="legend-color" style="background: #ffaa44;"></div>
+      <span>PersistentVolume</span>
+      <span class="resource-count" id="count-persistentvolume">0</span>
+    </div>
+    <div class="legend-item" data-type="persistentvolumeclaim">
+      <div class="legend-color" style="background: #44aaff;"></div>
+      <span>PersistentVolumeClaim</span>
+      <span class="resource-count" id="count-persistentvolumeclaim">0</span>
+    </div>
     <div class="legend-controls">
       <div class="legend-button" id="show-all">Show All</div>
       <div class="legend-button" id="hide-all">Hide All</div>
+    </div>
+    
+    <!-- Filter Presets -->
+    <div class="legend-section">
+      <div class="legend-title" style="margin-top: 15px;">Filter Presets</div>
+      <div class="preset-controls">
+        <div class="preset-button" id="preset-network">Network View</div>
+        <div class="preset-button" id="preset-namespace">Namespace View</div>
+        <div class="preset-button" id="preset-workload">Workload View</div>
+        <div class="preset-button" id="preset-storage">Storage View</div>
+      </div>
     </div>
     
     <!-- Relationship Legend -->
@@ -662,16 +750,22 @@
         <span>Accesses</span>
         <span class="relationship-count" id="count-accesses">0</span>
       </div>
+      <div class="legend-item" data-relationship="claims">
+        <div class="legend-line" style="background: #44aaff; opacity: 0.8;"></div>
+        <span>Claims</span>
+        <span class="relationship-count" id="count-claims">0</span>
+      </div>
     </div>
     
     <div class="help-text">
       Click resource types to toggle visibility<br>
       Click connection types to toggle relationships<br>
+      Use presets for common views<br>
       Hover for detailed tooltips<br>
       Click resources to zoom & show details<br>
       <br>
       Shortcuts: Ctrl+A (show all), Ctrl+H (hide all)<br>
-      O (domains), P (pods), S (services), D (deployments), etc.
+      1-4 (presets), O (domains), P (pods), S (services), D (deployments), V (PV), B (PVC), etc.
     </div>
   </div>
   
@@ -792,6 +886,26 @@
               if (n.resourceinfo.image_pull_secrets) tooltip += `<div><span style="color: #cc66ff;">Image Pull Secrets:</span> ${n.resourceinfo.image_pull_secrets}</div>`;
             }
             
+            // PersistentVolume info
+            if (n.type === 'persistentvolume') {
+              if (n.resourceinfo.capacity) tooltip += `<div><span style="color: #cc66ff;">Capacity:</span> ${n.resourceinfo.capacity}</div>`;
+              if (n.resourceinfo.access_modes) tooltip += `<div><span style="color: #cc66ff;">Access Modes:</span> ${n.resourceinfo.access_modes}</div>`;
+              if (n.resourceinfo.reclaim_policy) tooltip += `<div><span style="color: #cc66ff;">Reclaim Policy:</span> ${n.resourceinfo.reclaim_policy}</div>`;
+              if (n.resourceinfo.storage_class) tooltip += `<div><span style="color: #cc66ff;">Storage Class:</span> ${n.resourceinfo.storage_class}</div>`;
+              if (n.resourceinfo.volume_mode) tooltip += `<div><span style="color: #cc66ff;">Volume Mode:</span> ${n.resourceinfo.volume_mode}</div>`;
+              if (n.resourceinfo.claim_ref) tooltip += `<div><span style="color: #cc66ff;">Claimed By:</span> ${n.resourceinfo.claim_ref}</div>`;
+            }
+            
+            // PersistentVolumeClaim info
+            if (n.type === 'persistentvolumeclaim') {
+              if (n.resourceinfo.requested_storage) tooltip += `<div><span style="color: #cc66ff;">Requested:</span> ${n.resourceinfo.requested_storage}</div>`;
+              if (n.resourceinfo.access_modes) tooltip += `<div><span style="color: #cc66ff;">Access Modes:</span> ${n.resourceinfo.access_modes}</div>`;
+              if (n.resourceinfo.storage_class) tooltip += `<div><span style="color: #cc66ff;">Storage Class:</span> ${n.resourceinfo.storage_class}</div>`;
+              if (n.resourceinfo.volume_name) tooltip += `<div><span style="color: #cc66ff;">Volume:</span> ${n.resourceinfo.volume_name}</div>`;
+              if (n.resourceinfo.volume_mode) tooltip += `<div><span style="color: #cc66ff;">Volume Mode:</span> ${n.resourceinfo.volume_mode}</div>`;
+              if (n.resourceinfo.phase) tooltip += `<div><span style="color: #cc66ff;">Phase:</span> ${n.resourceinfo.phase}</div>`;
+            }
+            
             tooltip += `</div>`;
           }
           
@@ -845,34 +959,30 @@
             return '#ccff66'; // Bright yellow-green for config maps
           } else if (n.type == "secret") {
             return '#ff6666'; // Bright red for secrets
+          } else if (n.type == "persistentvolume") {
+            return '#ffaa44'; // Bright orange for persistent volumes
+          } else if (n.type == "persistentvolumeclaim") {
+            return '#44aaff'; // Bright blue for persistent volume claims
           }
           return '#ffffff'; // Default white
         })
         .nodeThreeObject(function(n){
-          // Helper function to create a group with mesh and label
+          // Helper function to create a group with mesh and combined label
           function createNodeWithLabel(mesh, name, type, yOffset = -20) {
             const group = new THREE.Group();
             group.add(mesh);
             
-            // Create name label
-            const nameSprite = new SpriteText(name);
-            nameSprite.color = '#ffffff';
-            nameSprite.textHeight = 4;
-            nameSprite.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-            nameSprite.padding = 2;
-            nameSprite.borderRadius = 2;
-            nameSprite.position.y = yOffset;
-            group.add(nameSprite);
-            
-            // Create type label
-            const typeSprite = new SpriteText(`[${type}]`);
-            typeSprite.color = '#aaaaaa';
-            typeSprite.textHeight = 3;
-            typeSprite.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-            typeSprite.padding = 1;
-            typeSprite.borderRadius = 2;
-            typeSprite.position.y = yOffset - 6;
-            group.add(typeSprite);
+            // Create combined name and type label
+            const combinedLabel = `[${type}] ${name}`;
+            const labelSprite = new SpriteText(combinedLabel);
+            labelSprite.color = '#ffffff';
+            labelSprite.textHeight = 3.5;
+            labelSprite.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            labelSprite.padding = 3;
+            labelSprite.borderRadius = 3;
+            labelSprite.position.y = yOffset;
+            labelSprite.fontFace = 'Arial, sans-serif';
+            group.add(labelSprite);
             
             return group;
           }
@@ -1046,6 +1156,30 @@
             }))
             return createNodeWithLabel(mesh, n.name, n.type, -12);
           }
+          if (n.type == "persistentvolume") {
+            // Bright orange cylinder for persistent volumes (represents storage)
+            var mesh = new THREE.Mesh(
+              new THREE.CylinderGeometry(8, 8, 6, 8),
+              new THREE.MeshPhongMaterial({
+                color: 0xffaa44,
+                emissive: 0x442211,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -14);
+          }
+          if (n.type == "persistentvolumeclaim") {
+            // Bright blue cone for persistent volume claims (represents claim/request)
+            var mesh = new THREE.Mesh(
+              new THREE.ConeGeometry(7, 10, 6),
+              new THREE.MeshPhongMaterial({
+                color: 0x44aaff,
+                emissive: 0x112244,
+                transparent: false,
+                opacity: 1
+            }))
+            return createNodeWithLabel(mesh, n.name, n.type, -16);
+          }
           if (n.type == "namespace") {
             const sprite = new SpriteText(n.name);
             sprite.color = '#ffffff'; // Bright white text
@@ -1067,16 +1201,17 @@
             case 'manages': return '#99ff66';      // Lime for management
             case 'runs': return '#6699ff';         // Blue for running on
             case 'accesses': return '#cc66ff';     // Purple for access
+            case 'claims': return '#44aaff';       // Blue for PVC claiming PV
             default: return '#66ccff';             // Default cyan
           }
         })
-        .linkWidth(2) // Thicker links for better visibility
-        .linkDirectionalParticles(15) // More particles
-        .linkDirectionalParticleWidth(3) // Brighter particles
-        .linkDirectionalParticleColor(() => '#ffffff') // White particles
+        .linkWidth(2) // Static link width for better performance
+        .linkDirectionalParticles(15) // Static particle count
+        .linkDirectionalParticleWidth(3) // Static particle width
+        .linkDirectionalParticleColor(() => '#ffffff') // Static white particles
         .numDimensions(3)
         .nodeResolution(15)
-        .linkDirectionalParticleSpeed(0.008) // Faster particles
+        .linkDirectionalParticleSpeed(0.008) // Static particle speed
         .linkOpacity(function(link) {
           // Opacity based on relationship type
           switch(link.relationship) {
@@ -1088,6 +1223,8 @@
             case 'manages': return 0.8;      // Standard opacity for management
             case 'runs': return 0.7;         // Lower opacity for running on
             case 'accesses': return 0.9;     // High opacity for access
+            case 'claims': return 0.8;       // Standard opacity for claims
+            case 'binds_to': return 0.8;     // Standard opacity for binds
             default: return 0.8;             // Default opacity
           }
         })
@@ -1157,24 +1294,25 @@
           // Optimize for mobile performance
           graph
             .nodeResolution(8) // Lower resolution for better performance
-            .linkDirectionalParticles(8) // Fewer particles
+            .linkDirectionalParticles(8) // Fewer particles for mobile performance
             .linkDirectionalParticleWidth(2) // Smaller particles
             .enableNodeDrag(false) // Disable node dragging on mobile for better touch interaction
-            .enableNavigationControls(false); // Disable navigation controls overlay
+            .enableNavigationControls(true); // Enable navigation controls for mobile camera control
             
-          // Prevent default touch behaviors that interfere with 3D interaction
+          // Allow touch behaviors for camera control
           const graphElement = document.getElementById('3d-graph');
+          
+          // Only prevent multi-touch zoom, allow single touch for camera control
           graphElement.addEventListener('touchstart', (e) => {
-            if (e.touches.length > 1) {
-              e.preventDefault(); // Prevent pinch zoom
+            if (e.touches.length > 2) {
+              e.preventDefault(); // Prevent 3+ finger gestures
             }
           }, { passive: false });
           
+          // Allow two-finger gestures for zoom and rotation
           graphElement.addEventListener('touchmove', (e) => {
-            if (e.touches.length > 1) {
-              e.preventDefault(); // Prevent pinch zoom during move
-            }
-          }, { passive: false });
+            // Allow all touch moves for camera control
+          }, { passive: true });
         }
 
         // Resource type visibility management
@@ -1332,6 +1470,7 @@
           const legendItem = document.querySelector(`[data-type="${type}"]`);
           
           isUpdatingFromToggle = true;
+          clearActivePreset(); // Clear active preset on manual toggle
           
           if (hiddenResourceTypes.has(type)) {
             hiddenResourceTypes.delete(type);
@@ -1358,10 +1497,12 @@
 
         function showAllResourceTypes() {
           isUpdatingFromToggle = true;
+          clearActivePreset(); // Clear active preset
           showRenderingDialog();
           
           setTimeout(() => {
             hiddenResourceTypes.clear();
+            hiddenRelationshipTypes.clear(); // Also show all relationships
             document.querySelectorAll('.legend-item').forEach(item => {
               item.classList.remove('disabled');
             });
@@ -1374,11 +1515,12 @@
               isUpdatingFromToggle = false;
               toggleTimeout = null;
             }, 150);
-          }, 100);
+          }, 10);
         }
 
         function hideAllResourceTypes() {
           isUpdatingFromToggle = true;
+          clearActivePreset(); // Clear active preset
           showRenderingDialog();
           
           setTimeout(() => {
@@ -1443,6 +1585,7 @@
           const legendItem = document.querySelector(`[data-relationship="${relationship}"]`);
           
           isUpdatingFromToggle = true;
+          clearActivePreset(); // Clear active preset on manual toggle
           
           if (hiddenRelationshipTypes.has(relationship)) {
             hiddenRelationshipTypes.delete(relationship);
@@ -1480,6 +1623,136 @@
             handleToggle();
           });
         });
+
+        // Filter preset configurations
+        const filterPresets = {
+          network: {
+            name: 'Network Constellation View',
+            resourceTypes: ['domain', 'pod', 'service', 'ingress', 'endpointslice', 'namespace'],
+            relationshipTypes: ['exposes', 'routes', 'depends_on', 'contains']
+          },
+          namespace: {
+            name: 'Namespace Bulbs',
+            resourceTypes: ['namespace', 'pod', 'deployment', 'replicaset', 'daemonset', 'statefulset'],
+            relationshipTypes: ['contains', 'manages', 'instance_of']
+          },
+          workload: {
+            name: 'Workload View',
+            resourceTypes: ['pod', 'deployment', 'replicaset', 'daemonset', 'statefulset', 'node'],
+            relationshipTypes: ['manages', 'instance_of', 'runs']
+          },
+          storage: {
+            name: 'Storage & Config View',
+            resourceTypes: ['pod', 'configmap', 'secret', 'serviceaccount', 'persistentvolume', 'persistentvolumeclaim'],
+            relationshipTypes: ['accesses', 'depends_on', 'claims', 'binds_to']
+          }
+        };
+
+        let activePreset = null;
+
+        function applyFilterPreset(presetKey) {
+          const preset = filterPresets[presetKey];
+          if (!preset) return;
+
+          isUpdatingFromToggle = true;
+          showRenderingDialog();
+
+          setTimeout(() => {
+            // Clear all current filters
+            hiddenResourceTypes.clear();
+            hiddenRelationshipTypes.clear();
+
+            // Get all available resource types and relationship types
+            const allResourceTypes = new Set();
+            const allRelationshipTypes = new Set();
+            
+            if (originalData) {
+              originalData.nodes.forEach(node => allResourceTypes.add(node.type));
+              originalData.links.forEach(link => allRelationshipTypes.add(link.relationship));
+            }
+
+            // Hide resource types not in the preset
+            allResourceTypes.forEach(type => {
+              if (!preset.resourceTypes.includes(type)) {
+                hiddenResourceTypes.add(type);
+              }
+            });
+
+            // Hide relationship types not in the preset
+            allRelationshipTypes.forEach(relationship => {
+              if (!preset.relationshipTypes.includes(relationship)) {
+                hiddenRelationshipTypes.add(relationship);
+              }
+            });
+
+            // Update legend UI
+            document.querySelectorAll('.legend-item[data-type]').forEach(item => {
+              const type = item.getAttribute('data-type');
+              if (hiddenResourceTypes.has(type)) {
+                item.classList.add('disabled');
+              } else {
+                item.classList.remove('disabled');
+              }
+            });
+
+            document.querySelectorAll('.legend-item[data-relationship]').forEach(item => {
+              const relationship = item.getAttribute('data-relationship');
+              if (hiddenRelationshipTypes.has(relationship)) {
+                item.classList.add('disabled');
+              } else {
+                item.classList.remove('disabled');
+              }
+            });
+
+            // Update preset button states
+            document.querySelectorAll('.preset-button').forEach(btn => {
+              btn.classList.remove('active');
+            });
+            document.getElementById(`preset-${presetKey}`).classList.add('active');
+            activePreset = presetKey;
+
+            // Apply the filter
+            applyFilterAndUpdate();
+
+            if (toggleTimeout) {
+              clearTimeout(toggleTimeout);
+            }
+            toggleTimeout = setTimeout(() => {
+              isUpdatingFromToggle = false;
+              toggleTimeout = null;
+            }, 150);
+
+            console.log(`Applied ${preset.name} preset:`, {
+              visibleResourceTypes: preset.resourceTypes,
+              visibleRelationshipTypes: preset.relationshipTypes
+            });
+          }, 10);
+        }
+
+        // Add event listeners for preset buttons
+        document.getElementById('preset-network').addEventListener('click', () => applyFilterPreset('network'));
+        document.getElementById('preset-namespace').addEventListener('click', () => applyFilterPreset('namespace'));
+        document.getElementById('preset-workload').addEventListener('click', () => applyFilterPreset('workload'));
+        document.getElementById('preset-storage').addEventListener('click', () => applyFilterPreset('storage'));
+
+        // Add touch support for preset buttons
+        document.querySelectorAll('.preset-button').forEach(btn => {
+          const presetKey = btn.id.replace('preset-', '');
+          btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            applyFilterPreset(presetKey);
+          });
+        });
+
+        // Clear active preset when manual toggles are used
+        function clearActivePreset() {
+          if (activePreset) {
+            document.querySelectorAll('.preset-button').forEach(btn => {
+              btn.classList.remove('active');
+            });
+            activePreset = null;
+          }
+        }
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (event) => {
@@ -1521,6 +1794,24 @@
               break;
             case 'o':
               toggleResourceType('domain');
+              break;
+            case 'v':
+              toggleResourceType('persistentvolume');
+              break;
+            case 'b':
+              toggleResourceType('persistentvolumeclaim');
+              break;
+            case '1':
+              applyFilterPreset('network');
+              break;
+            case '2':
+              applyFilterPreset('namespace');
+              break;
+            case '3':
+              applyFilterPreset('workload');
+              break;
+            case '4':
+              applyFilterPreset('storage');
               break;
           }
         });
@@ -1871,15 +2162,28 @@
           const filteredData = filterGraphData(newData);
           
           if (!isInitialized) {
-            // First time - load filtered data
-            const startTime = performance.now();
-            graph.graphData(filteredData);
-            currentFilteredData = JSON.parse(JSON.stringify(filteredData));
-            isInitialized = true;
-            logUpdatePerformance('full-initial', startTime, {
-              totalNodes: filteredData.nodes.length,
-              totalLinks: filteredData.links.length
-            });
+            // Show rendering dialog for initial graph load
+            showRenderingDialog();
+            
+            // Use setTimeout to allow rendering dialog to show before heavy graph rendering
+            setTimeout(() => {
+              // First time - load filtered data
+              const startTime = performance.now();
+              graph.graphData(filteredData);
+              currentFilteredData = JSON.parse(JSON.stringify(filteredData));
+              isInitialized = true;
+              
+              // Hide both loading overlay and rendering dialog
+              hideLoadingOverlay();
+              setTimeout(() => {
+                hideRenderingDialog();
+              }, 200); // Small delay to ensure graph has rendered
+              
+              logUpdatePerformance('full-initial', startTime, {
+                totalNodes: filteredData.nodes.length,
+                totalLinks: filteredData.links.length
+              });
+            }, 50);
             return;
           }
 
@@ -2307,6 +2611,8 @@
           e.preventDefault();
           closeSidebar();
         });
+
+        // Animation removed for better performance
 
         // Start WebSocket connection
         connectWebSocket();
