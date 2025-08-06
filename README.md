@@ -53,8 +53,7 @@ and open http://127.0.0.1:3000 in your browser
 To build and run `kube-universe` from source
 
 ```sh
-statik -f -src=./web/
-go run main.go serve
+go run . serve
 ```
 
 ## Acknowledgements

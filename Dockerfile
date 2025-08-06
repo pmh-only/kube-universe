@@ -3,15 +3,14 @@ FROM golang:1.24.5 AS builder
 WORKDIR /workspace
 
 COPY go.mod go.sum .
-RUN go install github.com/rakyll/statik
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     go mod download
 
-COPY cmd/    cmd/
-COPY pkg/    pkg/
-COPY statik/ statik/
+COPY cmd/ cmd/
+COPY pkg/ pkg/
+COPY web/ web/
 COPY main.go .
 
 RUN --mount=type=cache,target=/root/.cache/go-build \

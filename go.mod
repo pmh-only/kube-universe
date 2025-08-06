@@ -1,11 +1,10 @@
 module github.com/afritzler/kube-universe
 
-go 1.21
+go 1.22
 
 require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/rakyll/statik v0.1.7
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.19.0
 	k8s.io/apimachinery v0.29.4

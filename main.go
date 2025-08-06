@@ -14,7 +14,9 @@
 
 package main
 
-import "github.com/afritzler/kube-universe/cmd"
+import (
+	"github.com/afritzler/kube-universe/cmd"
+)
 
 func main() {
 	cmd.Execute()
