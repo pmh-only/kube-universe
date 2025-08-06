@@ -15,10 +15,11 @@ function connectWebSocket() {
       const data = JSON.parse(event.data);
       const timestamp = new Date().toLocaleTimeString();
       
-      // Hide loading overlay on first data received
+      // Hide loading overlay and show rendering dialog on first data received
       if (!isInitialized) {
         hideLoadingOverlay();
-        isInitialized = true;
+        showRenderingDialog();
+        // Don't set isInitialized here - let updateGraphData handle it
       }
       
       // Handle different message types
@@ -285,9 +286,7 @@ function updateGraphData(newData) {
   const filteredData = filterGraphData(newData);
   
   if (!isInitialized) {
-    // Show rendering dialog for initial graph load
-    showRenderingDialog();
-    
+    // Rendering dialog should already be visible from onmessage handler
     // Use setTimeout to allow rendering dialog to show before heavy graph rendering
     setTimeout(() => {
       // First time - load filtered data
@@ -296,17 +295,16 @@ function updateGraphData(newData) {
       currentFilteredData = JSON.parse(JSON.stringify(filteredData));
       isInitialized = true;
       
-      // Hide both loading overlay and rendering dialog
-      hideLoadingOverlay();
+      // Hide rendering dialog after graph has been rendered
       setTimeout(() => {
         hideRenderingDialog();
-      }, 200); // Small delay to ensure graph has rendered
+      }, 300); // Slightly longer delay to ensure graph has fully rendered
       
       logUpdatePerformance('full-initial', startTime, {
         totalNodes: filteredData.nodes.length,
         totalLinks: filteredData.links.length
       });
-    }, 50);
+    }, 100); // Slightly longer delay to ensure rendering dialog is visible
     return;
   }
 

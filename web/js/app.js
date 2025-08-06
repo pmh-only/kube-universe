@@ -30,7 +30,7 @@ const filterPresets = {
   network: {
     name: 'Network Constellation View',
     resourceTypes: ['domain', 'pod', 'service', 'ingress', 'endpointslice', 'namespace'],
-    relationshipTypes: ['exposes', 'routes', 'depends_on', 'contains']
+    relationshipTypes: ['exposes', 'routes', 'depends_on', 'contains', 'accesses']
   },
   namespace: {
     name: 'Namespace Bulbs',

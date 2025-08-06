@@ -51,13 +51,10 @@ func (h *Hub) Run() {
 	defer ticker.Stop()
 
 	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				// Only fetch if we have clients
-				if len(h.clients) > 0 {
-					h.fetchAndBroadcast()
-				}
+		for range ticker.C {
+			// Only fetch if we have clients
+			if len(h.clients) > 0 {
+				h.fetchAndBroadcast()
 			}
 		}
 	}()
@@ -126,7 +123,7 @@ func (h *Hub) fetchAndBroadcast() {
 	// Broadcast delta
 	log.Printf("Broadcasting %s update to %d clients", deltaUpdate.Type, len(h.clients))
 	h.broadcast <- deltaJSON
-	
+
 	// Update lastData for backward compatibility
 	h.lastData = make([]byte, len(data))
 	copy(h.lastData, data)
@@ -180,7 +177,7 @@ func (h *Hub) sendInitialData(client *Client) {
 
 	select {
 	case client.send <- fullUpdateJSON:
-		log.Printf("Sent initial full update to new client (%d nodes, %d links)", 
+		log.Printf("Sent initial full update to new client (%d nodes, %d links)",
 			len(*graph.Nodes), len(*graph.Links))
 	default:
 		close(client.send)
@@ -265,6 +262,7 @@ func (c *Client) writePump() {
 		}
 	}
 }
+
 // ResetDeltaTracker resets the delta tracker state
 func (h *Hub) ResetDeltaTracker() {
 	h.deltaTracker.Reset()
