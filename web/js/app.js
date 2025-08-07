@@ -1,5 +1,5 @@
 // Global variables
-let hiddenResourceTypes = new Set(['namespace']); // Hide namespaces by default
+let hiddenResourceTypes = new Set(['namespace', 'configmap', 'secret', 'serviceaccount']); // Hide namespaces by default
 let hiddenRelationshipTypes = new Set(); // Track hidden relationship types
 let originalData = { nodes: [], links: [] };
 let currentFilteredData = { nodes: [], links: [] };
